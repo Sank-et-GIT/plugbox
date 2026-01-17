@@ -1,0 +1,20 @@
+{
+  "deviceId": "PB-NGP-D001",
+  "macAddress": "7CDFA13B92F0",
+  "timestamp": "2026-01-16T14:10:30Z",
+
+  "doorState": "LOCKED",
+  "eStop": false,
+
+  "voltage": 229.4,
+  "current": 1.8,
+  "power": 410,
+
+  "firmwareVersion": "v1.0.0",
+  "signalStrength": -68,
+  "uptimeSeconds": 5420,
+
+  "fault": false,
+  "status": "ONLINE",
+  "temperature": 42.5
+}
