@@ -1,12 +1,14 @@
 <div align="center">
   <h1>PLUG BOX</h1>
-</div>
+
 
 ![Status](https://img.shields.io/badge/Status-In%20Progress-yellow)
 ![Device](https://img.shields.io/badge/Device-PlugBox-blue)
 ![Platform](https://img.shields.io/badge/Platform-ESP32%20%7C%20STM32-orange)
 ![Simulator](https://img.shields.io/badge/Simulator-Node.js-green)
+</div>
 
+---
 # Overview
 
 This project simulates the PlugBox hardware device for a two-wheeler EV charging system.
