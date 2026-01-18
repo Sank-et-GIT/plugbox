@@ -16,3 +16,40 @@
 14. Charger becomes available again
 
 This flow is locked for Week-1 and Week-2 development.
+
+## System Flow (Up to Day (4) 18-01-2026)
+
+The EV charger periodically sends heartbeat data to the backend server.
+The backend processes this data, updates the charger status and lastSeen time,
+and stores it in the PostgreSQL database using Prisma ORM.
+
+A background job in the backend continuously checks for inactive chargers.
+If a charger does not send a heartbeat within a defined time threshold,
+the backend automatically marks the charger as OFFLINE.
+
+The dashboard and admin panels fetch real-time charger data from the backend
+using REST APIs to display live status and last-seen information.
+-------------------------------------------------------------------------------------------
+### Mermaid diagram
+flowchart LR
+  A["Device / Charger (Device Simulator)
+- Sends heartbeat every 5s
+- Payload: {chargerId, status}"] -->|"POST /device/heartbeat"| B["PlugBox Backend (Node.js + Express + TS)
+- Updates status + lastSeen
+- Offline checker job"]
+
+  B -->|"Prisma write/read"| C[("PostgreSQL DB
+Charger table:
+id, name, lat, lng,
+status, lastSeen, createdAt")]
+
+  B -->|"GET /chargers
+GET /admin/chargers"| D["Dashboard / App (Future UI)
+- Shows ONLINE/OFFLINE
+- lastSeenSecondsAgo"]
+
+  E["Offline Detection Logic
+Every 30s:
+if now - lastSeen > threshold
+then status = OFFLINE"] -.-> B
+----------------------------------------------------------------------------------------------

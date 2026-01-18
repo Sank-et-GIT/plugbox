@@ -17,6 +17,12 @@ These documents define:
 
 
 These files act as a contract for development and will be expanded in later phases.
+-----------------------------------------------------------------------------------------------------------
+### Current Progress
+- Backend APIs implemented (heartbeat, charger listing)
+- Device simulator for periodic heartbeats
+- Automatic charger offline detection
+- Live charger monitoring via APIs
 
 
 

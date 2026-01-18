@@ -1,0 +1,12 @@
+# dependencies
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+
+# env
+.env
+
+# OS
+.DS_Store
