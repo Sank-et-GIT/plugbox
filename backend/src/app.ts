@@ -5,10 +5,13 @@ import deviceRoutes from "./routes/device";
 import chargersRoutes from "./routes/chargers";
 import adminRoutes from "./routes/admin";
 
+import bookingsRoutes from "./routes/bookings";
+
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use("/bookings", bookingsRoutes);
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });

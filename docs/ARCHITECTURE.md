@@ -1,24 +1,70 @@
 # High-Level Architecture
 
-The PlugBox system consists of four main components:
+The PlugBox system is designed as a centralized backend-controlled EV charging system.
 
-1. Android Application
-   - Used by customers
-   - Handles booking, QR scan, and session state
+It consists of the following main components:
 
-2. Backend Server
-   - Node.js + Express
-   - Handles business logic, bookings, sessions
-   - Communicates with both app and device
+---
 
-3. Web Dashboard
-   - Used by Host and Admin
-   - Shows chargers, sessions, earnings
+## 1. Android Application (Planned)
 
-4. Charger Device (Simulator / Hardware)
-   - Sends heartbeat
-   - Receives unlock commands
-   - Reports current detection
+- Used by end users
+- Will allow users to view chargers and place bookings
+- Will interact with the backend using REST APIs
 
-Communication is REST-based.
-State is persisted in the backend database.
+(This component is planned and not yet implemented.)
+
+---
+
+## 2. Backend Server (Implemented)
+
+- Built using Node.js and Express
+- Acts as the core control system
+- Handles:
+  - Charger monitoring
+  - Device heartbeats
+  - Booking holds and expiry
+  - Offline detection logic
+- Communicates with both devices and frontend clients
+
+This is the primary component implemented so far.
+
+---
+
+## 3. Database (Implemented)
+
+- PostgreSQL database accessed using Prisma ORM
+- Stores:
+  - Charger details and status
+  - Last seen timestamps
+  - Booking hold information
+- Ensures data persistence across server restarts
+
+---
+
+## 4. Charger Device / Device Simulator (Implemented)
+
+- Represents a real EV charger
+- Periodically sends heartbeat messages to the backend
+- Used to simulate real hardware behavior during development
+
+---
+
+## 5. Web Dashboard (Planned)
+
+- Will be used by admin or host users
+- Will display charger status, bookings, and sessions
+- Will consume backend APIs for live data
+
+---
+
+## Communication Model
+
+- All communication is REST-based
+- Devices and clients communicate only with the backend
+- The backend controls system state and decision-making
+
+---
+
+This architecture ensures centralized control, real-time monitoring,
+and scalable integration of chargers and user applications.
