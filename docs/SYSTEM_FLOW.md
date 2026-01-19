@@ -1,8 +1,13 @@
-# System Flow (Golden Flow)
+# System Flow
+
+## System Flow (Golden Flow – Planned)
+
+This is the complete expected flow of the system.
+Some steps are planned and will be implemented in later days.
 
 1. User opens Android app and views nearby chargers
 2. User selects a charger
-3. Booking hold is created (valid for 2 minutes)
+3. Booking hold is created (valid for limited time)
 4. Payment is simulated and booking is confirmed
 5. User arrives within allowed grace period
 6. User scans QR code on charger
@@ -15,41 +20,46 @@
 13. Door closed → session finalized
 14. Charger becomes available again
 
-This flow is locked for Week-1 and Week-2 development.
+This full flow will be completed in later development phases.
 
-## System Flow (Up to Day (4) 18-01-2026)
+---
 
-The EV charger periodically sends heartbeat data to the backend server.
-The backend processes this data, updates the charger status and lastSeen time,
-and stores it in the PostgreSQL database using Prisma ORM.
+## System Flow (Implemented up to date 18-01-2026)
 
-A background job in the backend continuously checks for inactive chargers.
-If a charger does not send a heartbeat within a defined time threshold,
-the backend automatically marks the charger as OFFLINE.
+### Device Monitoring Flow
 
-The dashboard and admin panels fetch real-time charger data from the backend
-using REST APIs to display live status and last-seen information.
--------------------------------------------------------------------------------------------
-### Mermaid diagram
+- The EV charger (simulated device) sends heartbeat messages to the backend at regular intervals.
+- The backend receives the heartbeat and updates the charger status and lastSeen time.
+- Charger information is stored in the PostgreSQL database using Prisma ORM.
+
+### Offline Detection Logic
+
+- The backend runs a background job at regular intervals.
+- If a charger does not send a heartbeat within the allowed time,
+  the backend automatically marks the charger as OFFLINE.
+- This ensures correct charger availability even if a device disconnects unexpectedly.
+
+### Booking Hold Flow
+
+- A user can place a temporary booking hold on a charger.
+- Only one active hold is allowed per charger at a time.
+- If a charger is already held, new hold requests are rejected.
+- Booking holds automatically expire after the configured time.
+- Once expired, the charger becomes available for new holds.
+
+### Data Access Flow
+
+- The dashboard and admin panel fetch charger data using backend APIs.
+- APIs return charger status, last seen time, and time since last update.
+- This enables real-time charger monitoring.
+
+---
+
+## Diagram (Current Implementation)
+
+```mermaid
 flowchart LR
-  A["Device / Charger (Device Simulator)
-- Sends heartbeat every 5s
-- Payload: {chargerId, status}"] -->|"POST /device/heartbeat"| B["PlugBox Backend (Node.js + Express + TS)
-- Updates status + lastSeen
-- Offline checker job"]
-
-  B -->|"Prisma write/read"| C[("PostgreSQL DB
-Charger table:
-id, name, lat, lng,
-status, lastSeen, createdAt")]
-
-  B -->|"GET /chargers
-GET /admin/chargers"| D["Dashboard / App (Future UI)
-- Shows ONLINE/OFFLINE
-- lastSeenSecondsAgo"]
-
-  E["Offline Detection Logic
-Every 30s:
-if now - lastSeen > threshold
-then status = OFFLINE"] -.-> B
-----------------------------------------------------------------------------------------------
+  A[Device / Charger Simulator] -->|POST /device/heartbeat| B[Backend Server]
+  B -->|Update status & lastSeen| C[(PostgreSQL Database)]
+  B -->|GET /chargers| D[Dashboard / Admin]
+  B -->|Offline check| B
