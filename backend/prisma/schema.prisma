@@ -6,7 +6,7 @@
 
 datasource db {
   provider = "postgresql"
-  url = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -14,15 +14,17 @@ generator client {
 }
 
 model Charger {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   name      String
   lat       Float
   lng       Float
   status    String
-  lastSeen DateTime?
-  createdAt DateTime @default(now())
+  lastSeen  DateTime?
+  createdAt DateTime  @default(now())
 
-  bookings  Booking[]
+  bookings Booking[]
+  sessions Session[]
+  commands DeviceCommand[]
 }
 
 enum BookingStatus {
@@ -33,17 +35,73 @@ enum BookingStatus {
 }
 
 model Booking {
-  id         Int           @id @default(autoincrement())
-  chargerId  Int
-  userId     String
-  status     BookingStatus @default(HOLD)
+  id        Int           @id @default(autoincrement())
+  chargerId Int
+  userId    String
+  status    BookingStatus @default(HOLD)
 
-  createdAt  DateTime      @default(now())
-  expiresAt  DateTime
-  updatedAt  DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  updatedAt DateTime @updatedAt
 
-  charger    Charger       @relation(fields: [chargerId], references: [id])
+  charger Charger @relation(fields: [chargerId], references: [id])
 
   @@index([chargerId])
   @@index([userId])
+}
+
+enum SessionStatus {
+  CREATED
+  UNLOCK_SENT
+  UNLOCKED
+  ACTIVE
+  ENDED
+  FAILED
+}
+
+enum CommandType {
+  UNLOCK
+}
+
+enum CommandStatus {
+  PENDING
+  ACKED
+}
+
+model Session {
+  id        Int           @id @default(autoincrement())
+  chargerId Int
+  userId    String
+  status    SessionStatus @default(CREATED)
+
+  startedAt  DateTime?
+  endedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  charger  Charger         @relation(fields: [chargerId], references: [id])
+  commands DeviceCommand[]
+
+  @@index([chargerId])
+  @@index([userId])
+}
+
+model DeviceCommand {
+  id        Int           @id @default(autoincrement())
+  chargerId Int
+  type      CommandType
+  status    CommandStatus @default(PENDING)
+
+  // optional metadata (future use)
+  payload Json?
+
+  createdAt DateTime  @default(now())
+  ackedAt   DateTime?
+  sessionId Int?
+
+  charger Charger  @relation(fields: [chargerId], references: [id])
+  session Session? @relation(fields: [sessionId], references: [id])
+
+  @@index([chargerId, status])
 }
