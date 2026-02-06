@@ -77,4 +77,36 @@ router.post("/start", async (req, res) => {
   }
 });
 
+router.post("/stop", async (req, res) => {
+  try {
+    const { sessionId } = req.body as { sessionId?: number };
+
+    if (typeof sessionId !== "number") {
+      return res.status(400).json({ error: "sessionId must be a number" });
+    }
+
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { status: SessionStatus.STOPPED },
+    });
+
+    return res.status(200).json({
+      ok: true,
+      sessionId,
+      status: "STOPPED",
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;
