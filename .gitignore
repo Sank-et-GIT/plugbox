@@ -1,12 +1,78 @@
-# dependencies
-node_modules/
-
-# IDE
-.idea/
-.vscode/
-
-# env
-.env
-
-# OS
+# ---- OS junk ----
 .DS_Store
+Thumbs.db
+
+# ---- IDEs ----
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# ---- Logs ----
+*.log
+logs/
+log/
+
+# ---- Secrets (never commit) ----
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.jks
+secrets/
+secret/
+**/secrets/
+
+# ---- Node / React / Express ----
+**/node_modules/
+**/dist/
+**/build/
+**/.next/
+**/.nuxt/
+**/.cache/
+**/coverage/
+**/.env.local
+**/.env.development.local
+**/.env.production.local
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+dashboard/.vite/
+
+# ---- Android / Kotlin / Gradle ----
+**/.gradle/
+**/build/
+**/captures/
+**/.idea/
+**/*.iml
+**/local.properties        # IMPORTANT: contains local SDK paths
+**/.cxx/
+**/.externalNativeBuild/
+**/*.apk
+**/*.aab
+**/*.keystore
+**/google-services.json    # only ignore if you treat it as secret; otherwise remove this line
+
+# Gradle daemon JVM settings (local machine specific)
+android/gradle/gradle-daemon-jvm.properties
+
+# ---- Java/Kotlin ----
+**/out/
+
+# ---- Python / DB tooling (optional) ----
+**/__pycache__/
+**/*.pyc
+
+# ---- Hardware / simulation artifacts (common) ----
+**/*.bin
+**/*.hex
+**/*.elf
+**/*.obj
+**/*.o
+**/*.a
+**/*.so
+**/*.dll
+**/*.exe
+**/*.dSYM/
