@@ -1,31 +1,38 @@
 package com.example.plugbox.network
 
-// RESPONSES
+// ApiModels batati hai server se kya data aayega aur kya bhejna hai — matlab request aur response ka structure define karti hai.
 
-//---------HealthResponse
-data class HealthResponse(val status: String)
+/**
+Yeh file 3 cheezein define kar rahi hai:
+Responses → server se kya aayega
+Entities → app ke andar ka real object
+Requests → server ko kya bhejna hai*/
 
-//---------ChargersResponse
-data class ChargersResponse(val chargers: List<Charger>)
+// Neeche jo classes hain wo server se aane wale replies ko represent karti hain.
 
-//---------HoldResponse
+// (HealthResponse) i.e Health API ka reply: sirf status aata hai (jaise "ok").
+data class HealthResponse(val status: String) // server ka reply = server said : { "status": "ok" } aur App banayega : HealthResponse("ok") "Matlab: JSON → Kotlin object"
+
+// (ChargersResponse)
+data class ChargersResponse(val chargers: List<Charger>) // chargers list API ka reply: chargers naam ki list aayegi, jisme Charger objects honge.
+
+// (HoldResponse) i.e Hold API ka reply: ok success/fail, aur booking details
 data class HoldResponse(
     val ok: Boolean,
     val booking: Booking
 )
 
-//---------StartResponse
-data class StartResponse(val ok: Boolean, val sessionId: Int, val commandId: Int)
+// (StartResponse)
+data class StartResponse(val ok: Boolean, val sessionId: Int, val commandId: Int) // Start charging ka reply: success + sessionId + commandId.
 
-//----------StopResponse
+// (StopResponse)
 data class StopResponse(
     val ok: Boolean
 )
 
-
-//----------------------------------------------------------------------------------------
-
 // ENTITIES
+
+// Niche app ke “real models” hain (Charger, Booking). Inko response/request dono use kar sakte hain
 
 //---------Charger
 data class Charger(
@@ -53,10 +60,12 @@ data class Booking(
 
 // REQUESTS
 
-//---------Hold Request
+// Neeche jo classes hain wo app server ko bhejti hai.
+
+//---------Hold Request [Hold karne ke liye: chargerId + userId bhej rhe]
 data class HoldRequest(val chargerId: Int, val userId: String)
 
-//---------StartRequest
+//---------StartRequest [ Start charging ke liye: chargerId + userId bhej rhe]
 data class StartRequest(val chargerId: Int, val userId: String)
 
 //---------Stop Request

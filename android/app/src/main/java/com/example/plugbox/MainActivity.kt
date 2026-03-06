@@ -16,15 +16,18 @@ import com.example.plugbox.network.Charger
 import com.example.plugbox.network.HoldRequest
 import com.example.plugbox.network.StartRequest
 import com.example.plugbox.network.StopRequest
+import com.example.plugbox.ui.PlugBoxAppRoot
+import com.example.plugbox.ui.PlugBoxHost
+import com.example.plugbox.ui.theme.PlugBoxTheme
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            PlugBoxTheme {
                 Surface(Modifier.fillMaxSize()) {
-                    PlugBoxScreen()
+                    PlugBoxAppRoot()
                 }
             }
         }
