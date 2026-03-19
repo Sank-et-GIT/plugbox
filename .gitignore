@@ -14,6 +14,13 @@ logs/
 log/
 
 # ---- Secrets (never commit) ----
+backend/.env
+dashboard/.env
+android/.env
+local.properties
+gradle.properties
+secrets.properties
+replacements.txt
 .env
 .env.*
 *.key
