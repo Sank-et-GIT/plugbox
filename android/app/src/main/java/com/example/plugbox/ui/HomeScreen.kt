@@ -29,9 +29,28 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.IntentSender
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RadialGradient
+import android.graphics.Shader
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
+import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationSettingsRequest
+import com.google.android.gms.location.SettingsClient
+import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
@@ -46,9 +65,7 @@ private val MockGreenBg    = Color(0xFFECFDF5)
 private val MockBlue       = Color(0xFF3B82F6)
 private val MockOrange     = Color(0xFFF59E0B)
 private val MockGray       = Color(0xFF64748B)
-private val MockGrayLight  = Color(0xFFF1F5F9)
 private val MockRed        = Color(0xFFEF4444)
-private val MockBg         = Color(0xFFF6F8FB)
 private val MockHandle     = Color(0xFFCBD5E1)
 private val MockTextMain   = Color(0xFF0B1220)
 
@@ -66,7 +83,130 @@ private fun haversineKm(lat1: Double, lng1: Double, lat2: Double, lng2: Double):
 
 private fun formatDistance(km: Double): String = when {
     km < 1.0 -> "${(km * 1000).roundToInt()} m"
-    else      -> String.format("%.1f km", km)
+    else      -> String.format(java.util.Locale.getDefault(), "%.1f km", km)
+}
+
+// ── MARKER COLORS ────────────────────────────────────────────
+private const val COLOR_IDLE     = 0xFF16C384.toInt()
+private const val COLOR_IN_USE   = 0xFFF4941C.toInt()
+private const val COLOR_OFFLINE  = 0xFF95989F.toInt()
+private const val COLOR_RESERVED = 0xFF3B82F6.toInt()
+
+// ── BRANDED TEARDROP MARKER with ⚡ inside ────────────────────
+// Large, unique shape — stands out from all Google Maps POI icons
+private fun plugboxMarkerBitmap(fillColor: Int): BitmapDescriptor {
+    val W = 120; val H = 160  // tall teardrop shape
+    val bmp = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bmp)
+
+    val cx = W / 2f
+    val r  = W / 2f - 6f     // circle radius
+    val tipY = H.toFloat() - 4f  // tip of teardrop at bottom
+
+    // ── DROP SHADOW ────────────────────────────────────────
+    val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = 0x33000000.toInt()
+        maskFilter = android.graphics.BlurMaskFilter(10f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+    }
+    val shadowPath = android.graphics.Path().apply {
+        addCircle(cx + 2f, r + 8f, r, android.graphics.Path.Direction.CW)
+        moveTo(cx - 8f + 2f, r + r * 0.6f + 8f)
+        lineTo(cx + 2f, tipY + 4f)
+        lineTo(cx + 8f + 2f, r + r * 0.6f + 8f)
+        close()
+    }
+    canvas.drawPath(shadowPath, shadowPaint)
+
+    // ── TEARDROP PATH ──────────────────────────────────────
+    val path = android.graphics.Path().apply {
+        addCircle(cx, r + 6f, r, android.graphics.Path.Direction.CW)
+        moveTo(cx - r * 0.55f, r + r * 0.55f + 6f)
+        lineTo(cx, tipY)
+        lineTo(cx + r * 0.55f, r + r * 0.55f + 6f)
+        close()
+    }
+
+    // Filled teardrop
+    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = fillColor }
+    canvas.drawPath(path, fillPaint)
+
+    // White border
+    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = android.graphics.Color.WHITE
+        style = Paint.Style.STROKE
+        strokeWidth = 5f
+    }
+    canvas.drawPath(path, borderPaint)
+
+    // ── WHITE CIRCLE INSIDE ────────────────────────────────
+    val innerR = r * 0.58f
+    val innerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = android.graphics.Color.WHITE
+        alpha = 40  // subtle inner highlight
+    }
+    canvas.drawCircle(cx, r + 6f, innerR, innerPaint)
+
+    // ── LIGHTNING BOLT ⚡ ──────────────────────────────────
+    // Drawn as a polygon path centered in the circle
+    val boltPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = android.graphics.Color.WHITE
+        style = Paint.Style.FILL
+    }
+    val cy = r + 6f
+    val bw = r * 0.38f   // bolt width scale
+    val bh = r * 0.65f   // bolt height scale
+    val boltPath = android.graphics.Path().apply {
+        // Top point → right mid → center notch → bottom point → left mid
+        moveTo(cx + bw * 0.1f, cy - bh)         // top
+        lineTo(cx + bw * 0.55f, cy - bh * 0.05f) // right upper
+        lineTo(cx + bw * 0.1f, cy + bh * 0.05f) // notch right
+        lineTo(cx + bw * 0.5f, cy + bh)          // bottom right
+        lineTo(cx - bw * 0.1f, cy + bh * 0.1f)  // bottom
+        lineTo(cx - bw * 0.45f, cy + bh * 0.1f) // left lower
+        lineTo(cx - bw * 0.05f, cy - bh * 0.05f)// notch left
+        lineTo(cx - bw * 0.5f, cy - bh * 0.05f) // left upper
+        close()
+    }
+    canvas.drawPath(boltPath, boltPaint)
+
+    return BitmapDescriptorFactory.fromBitmap(bmp)
+}
+
+// ── USER LOCATION MARKER (large glowing blue dot) ─────────────
+private fun userMarkerBitmap(): BitmapDescriptor {
+    val size = 160  // large and visible
+    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bmp)
+    val cx = size / 2f
+
+    // Big outer glow
+    val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = RadialGradient(cx, cx, cx,
+            intArrayOf(0x553B82F6.toInt(), 0x113B82F6.toInt(), android.graphics.Color.TRANSPARENT),
+            floatArrayOf(0.3f, 0.6f, 1f), Shader.TileMode.CLAMP)
+    }
+    canvas.drawCircle(cx, cx, cx, glowPaint)
+
+    // White ring
+    val whitePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = android.graphics.Color.WHITE
+        setShadowLayer(8f, 0f, 2f, 0x44000000.toInt())
+    }
+    canvas.drawCircle(cx, cx, 36f, whitePaint)
+
+    // Blue dot
+    val bluePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = 0xFF3B82F6.toInt()
+    }
+    canvas.drawCircle(cx, cx, 26f, bluePaint)
+
+    // Inner white highlight
+    val hlPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = 0x88FFFFFF.toInt()
+    }
+    canvas.drawCircle(cx - 7f, cx - 7f, 8f, hlPaint)
+
+    return BitmapDescriptorFactory.fromBitmap(bmp)
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -167,9 +307,80 @@ fun HomeMapScreen(
     // ═════════════════════════════════════════════════════════
     // UI
     // ═════════════════════════════════════════════════════════
+    // Bitmaps built inside GoogleMap lambda (after Maps SDK is ready)
+
+    // ── LOCATION SETTINGS: show "Turn on GPS" dialog if off ──
+    val settingsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { }
+    LaunchedEffect(locationPermissions.allPermissionsGranted) {
+        if (!locationPermissions.allPermissionsGranted) return@LaunchedEffect
+        try {
+            val lr = LocationRequest.Builder(
+                com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY, 5000L
+            ).build()
+            val sr = LocationSettingsRequest.Builder().addLocationRequest(lr).setAlwaysShow(true).build()
+            LocationServices.getSettingsClient(context).checkLocationSettings(sr)
+                .addOnFailureListener { ex ->
+                    if (ex is com.google.android.gms.common.api.ResolvableApiException) {
+                        try {
+                            settingsLauncher.launch(
+                                IntentSenderRequest.Builder(ex.resolution.intentSender).build()
+                            )
+                        } catch (_: IntentSender.SendIntentException) {}
+                    }
+                }
+        } catch (_: Exception) {}
+    }
+
+    // ── AUTO-ANIMATE CAMERA TO USER LOCATION ──────────────────
+    LaunchedEffect(userLocation) {
+        userLocation?.let { loc ->
+            cam.animate(
+                com.google.android.gms.maps.CameraUpdateFactory.newLatLngZoom(
+                    LatLng(loc.latitude, loc.longitude), 14f
+                ), durationMs = 900
+            )
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
 
         // ── MAP ───────────────────────────────────────────────
+        // Nearest idle charger for route line
+        val nearestIdle = sortedChargers.firstOrNull { it.status == ChargerStatus.IDLE }
+
+        // Pulsing scale animation for idle markers
+        val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+        val pulseScale by infiniteTransition.animateFloat(
+            initialValue = 0.92f,
+            targetValue = 1.08f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(900, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulseScale"
+        )
+        // Pulsing for user location ripple
+        val rippleAlpha by infiniteTransition.animateFloat(
+            initialValue = 0.6f,
+            targetValue = 0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "ripple"
+        )
+        val rippleRadius by infiniteTransition.animateFloat(
+            initialValue = 24f,
+            targetValue = 64f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "rippleRadius"
+        )
+
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cam,
@@ -177,26 +388,66 @@ fun HomeMapScreen(
                 zoomControlsEnabled = false,
                 myLocationButtonEnabled = false
             ),
-            properties = MapProperties(
-                isMyLocationEnabled = locationPermissions.allPermissionsGranted
-            )
+            properties = MapProperties(isMyLocationEnabled = false)
         ) {
+            // ── Build bitmaps HERE — Maps SDK guaranteed initialized inside this lambda ──
+            val idleIcon     = remember { plugboxMarkerBitmap(COLOR_IDLE) }
+            val inUseIcon    = remember { plugboxMarkerBitmap(COLOR_IN_USE) }
+            val offlineIcon  = remember { plugboxMarkerBitmap(COLOR_OFFLINE) }
+            val reservedIcon = remember { plugboxMarkerBitmap(COLOR_RESERVED) }
+            val userIcon     = remember { userMarkerBitmap() }
+
+            // Dashed route line: user → nearest idle charger
+            val loc = userLocation  // local val for smart cast
+            if (loc != null && nearestIdle != null) {
+                Polyline(
+                    points = listOf(
+                        LatLng(loc.latitude, loc.longitude),
+                        LatLng(nearestIdle.lat, nearestIdle.lng)
+                    ),
+                    color = Color(0xFF3B82F6),
+                    width = 8f,
+                    pattern = listOf(
+                        com.google.android.gms.maps.model.Dash(30f),
+                        com.google.android.gms.maps.model.Gap(15f)
+                    )
+                )
+            }
+
+            // Charger markers — branded teardrop with ⚡
+            // IDLE markers pulse; others are static
             sortedChargers.forEach { c ->
-                val hue = when (c.status) {
-                    ChargerStatus.IDLE     -> BitmapDescriptorFactory.HUE_GREEN
-                    ChargerStatus.IN_USE   -> BitmapDescriptorFactory.HUE_ORANGE
-                    ChargerStatus.RESERVED -> BitmapDescriptorFactory.HUE_ROSE
-                    ChargerStatus.OFFLINE  -> BitmapDescriptorFactory.HUE_YELLOW
+                val icon = when (c.status) {
+                    ChargerStatus.IDLE     -> idleIcon
+                    ChargerStatus.IN_USE   -> inUseIcon
+                    ChargerStatus.RESERVED -> reservedIcon
+                    ChargerStatus.OFFLINE  -> offlineIcon
                 }
+                val ms = remember(c.id) { MarkerState(LatLng(c.lat, c.lng)) }
+                // Use alpha pulse for IDLE to create attention effect
+                val markerAlpha = if (c.status == ChargerStatus.IDLE) pulseScale else 1f
                 Marker(
-                    state = MarkerState(position = LatLng(c.lat, c.lng)),
+                    state = ms,
                     title = c.name,
                     snippet = c.status.name,
-                    icon = BitmapDescriptorFactory.defaultMarker(hue),
-                    onClick = {
-                        onSelect(c)
-                        false
-                    }
+                    icon = icon,
+                    alpha = markerAlpha,
+                    zIndex = if (c.status == ChargerStatus.IDLE) 2f else 1f,
+                    onClick = { onSelect(c); false }
+                )
+            }
+
+            // User location — big ripple + dot
+            if (loc != null) {
+                val ums = remember(loc.latitude, loc.longitude) {
+                    MarkerState(LatLng(loc.latitude, loc.longitude))
+                }
+                Marker(
+                    state = ums,
+                    title = "You are here",
+                    icon = userIcon,
+                    anchor = androidx.compose.ui.geometry.Offset(0.5f, 0.5f),
+                    zIndex = 5f
                 )
             }
         }
@@ -496,7 +747,6 @@ private fun HsChargerRow(
     isSelected: Boolean,
     onClick: (() -> Unit)?
 ) {
-    val isIdle = charger.status == ChargerStatus.IDLE
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
