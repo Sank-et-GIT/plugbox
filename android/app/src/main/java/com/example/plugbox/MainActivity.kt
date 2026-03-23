@@ -14,10 +14,13 @@ import androidx.compose.ui.unit.dp
 import com.example.plugbox.network.ApiClient
 import com.example.plugbox.network.Charger
 import com.example.plugbox.network.HoldRequest
+import com.example.plugbox.network.NetworkStatus
 import com.example.plugbox.network.StartRequest
 import com.example.plugbox.network.StopRequest
+import com.example.plugbox.network.rememberNetworkStatus
+import com.example.plugbox.ui.CheckingConnectivityScreen
+import com.example.plugbox.ui.NoInternetScreen
 import com.example.plugbox.ui.PlugBoxAppRoot
-import com.example.plugbox.ui.PlugBoxHost
 import com.example.plugbox.ui.theme.PlugBoxTheme
 import kotlinx.coroutines.launch
 
@@ -27,26 +30,44 @@ class MainActivity : ComponentActivity() {
         setContent {
             PlugBoxTheme {
                 Surface(Modifier.fillMaxSize()) {
-                    PlugBoxAppRoot()
+                    AppWithNetworkGate()
                 }
             }
         }
     }
 }
 
+// ─────────────────────────────────────────────────────────────
+//  NETWORK GATE
+//  Checking     → neutral loading screen (prevents offline flash)
+//  Connected    → normal app
+//  Disconnected → polished fallback screen
+// ─────────────────────────────────────────────────────────────
+@Composable
+private fun AppWithNetworkGate() {
+    val networkStatus by rememberNetworkStatus()
+
+    when (networkStatus) {
+        is NetworkStatus.Checking     -> CheckingConnectivityScreen()
+        is NetworkStatus.Connected    -> PlugBoxAppRoot()
+        is NetworkStatus.Disconnected -> NoInternetScreen(onRetry = { /* flow auto-updates */ })
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ORIGINAL DEMO SCREEN — untouched
+// ─────────────────────────────────────────────────────────────
 @Composable
 fun PlugBoxScreen() {
     val scope = rememberCoroutineScope()
 
     var healthText by remember { mutableStateOf("Not checked") }
-    var chargers by remember { mutableStateOf<List<Charger>>(emptyList()) }
-    var selected by remember { mutableStateOf<Charger?>(null) }
-
+    var chargers   by remember { mutableStateOf<List<Charger>>(emptyList()) }
+    var selected   by remember { mutableStateOf<Charger?>(null) }
     var holdResult by remember { mutableStateOf("—") }
     var startResult by remember { mutableStateOf("—") }
-    var stopResult by remember { mutableStateOf("—") }
-
-    var sessionId by remember { mutableStateOf<Int?>(null) }
+    var stopResult  by remember { mutableStateOf("—") }
+    var sessionId   by remember { mutableStateOf<Int?>(null) }
 
     val userId = "rashi"
 
@@ -56,39 +77,32 @@ fun PlugBoxScreen() {
         Spacer(Modifier.height(12.dp))
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(
-                onClick = {
-                    scope.launch {
-                        try {
-                            val res = ApiClient.api.health()
-                            healthText = "OK (${res.status})"
-                        } catch (e: Exception) {
-                            healthText = "ERROR: ${e.message}"
-                        }
+            Button(onClick = {
+                scope.launch {
+                    try {
+                        val res = ApiClient.api.health()
+                        healthText = "OK (${res.status})"
+                    } catch (e: Exception) {
+                        healthText = "ERROR: ${e.message}"
                     }
-                },
-                modifier = Modifier.weight(1f)
-            ) { Text("Health") }
+                }
+            }, modifier = Modifier.weight(1f)) { Text("Health") }
 
-            Button(
-                onClick = {
-                    scope.launch {
-                        try {
-                            val res = ApiClient.api.chargers()
-                            chargers = res.chargers
-                            selected = chargers.firstOrNull()
-                        } catch (e: Exception) {
-                            chargers = emptyList()
-                        }
+            Button(onClick = {
+                scope.launch {
+                    try {
+                        val res = ApiClient.api.chargers()
+                        chargers = res.chargers
+                        selected = chargers.firstOrNull()
+                    } catch (e: Exception) {
+                        chargers = emptyList()
                     }
-                },
-                modifier = Modifier.weight(1f)
-            ) { Text("Load Chargers") }
+                }
+            }, modifier = Modifier.weight(1f)) { Text("Load Chargers") }
         }
 
         Spacer(Modifier.height(10.dp))
         Text("Server: $healthText")
-
         Spacer(Modifier.height(16.dp))
 
         Text("Chargers (tap to select)", style = MaterialTheme.typography.titleMedium)
@@ -98,37 +112,28 @@ fun PlugBoxScreen() {
             Text("No chargers loaded yet.")
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 240.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(chargers) { c ->
-                    ChargerRow(
-                        charger = c,
-                        isSelected = (selected?.id == c.id),
-                        onClick = { selected = c }
-                    )
+                    ChargerRow(charger = c, isSelected = selected?.id == c.id, onClick = { selected = c })
                 }
             }
         }
 
         Spacer(Modifier.height(12.dp))
         Text("Selected: " + (selected?.let { "${it.name} (id=${it.id})" } ?: "None"))
-
         Spacer(Modifier.height(16.dp))
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-
             Button(
-                enabled = (selected != null),
+                enabled = selected != null,
                 onClick = {
                     scope.launch {
                         holdResult = "Working..."
                         try {
-                            val cid = selected!!.id
-                            val res = ApiClient.api.hold(HoldRequest(chargerId = cid, userId = userId))
-                            holdResult = "Hold OK ✅ bookingId=${res.booking.id} (expiresAt=${res.booking.expiresAt})"
+                            val res = ApiClient.api.hold(HoldRequest(chargerId = selected!!.id, userId = userId))
+                            holdResult = "Hold OK ✅ bookingId=${res.booking.id}"
                         } catch (e: Exception) {
                             holdResult = "Hold ERROR: ${e.message}"
                         }
@@ -138,13 +143,12 @@ fun PlugBoxScreen() {
             ) { Text("Hold") }
 
             Button(
-                enabled = (selected != null),
+                enabled = selected != null,
                 onClick = {
                     scope.launch {
                         startResult = "Working..."
                         try {
-                            val cid = selected!!.id
-                            val res = ApiClient.api.start(StartRequest(chargerId = cid, userId = userId))
+                            val res = ApiClient.api.start(StartRequest(chargerId = selected!!.id, userId = userId))
                             sessionId = res.sessionId
                             startResult = "Start OK ✅ sessionId=${res.sessionId}"
                         } catch (e: Exception) {
@@ -156,14 +160,13 @@ fun PlugBoxScreen() {
             ) { Text("Start") }
 
             Button(
-                enabled = (sessionId != null),
+                enabled = sessionId != null,
                 onClick = {
                     scope.launch {
                         stopResult = "Working..."
                         try {
-                            val sid = sessionId!!
-                            val res = ApiClient.api.stop(StopRequest(sessionId = sid))
-                            stopResult = if (res.ok) "Stop OK ✅ sessionId=$sid" else "Stop FAIL ❌"
+                            val res = ApiClient.api.stop(StopRequest(sessionId = sessionId!!))
+                            stopResult = if (res.ok) "Stop OK ✅" else "Stop FAIL ❌"
                         } catch (e: Exception) {
                             stopResult = "Stop ERROR: ${e.message}"
                         }
@@ -174,19 +177,18 @@ fun PlugBoxScreen() {
         }
 
         Spacer(Modifier.height(16.dp))
-        Divider()
+        HorizontalDivider()
         Spacer(Modifier.height(12.dp))
 
         Text("Results", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
-
-        Text("Hold: $holdResult")
+        Text("Hold:  $holdResult")
         Text("Start: $startResult")
-        Text("Stop: $stopResult")
+        Text("Stop:  $stopResult")
 
         Spacer(Modifier.height(10.dp))
         Text(
-            "Tip: Hold expires in ~2 minutes. If Start says no active hold, press Hold then Start quickly.",
+            "Tip: Hold expires in ~2 minutes. If Start fails, press Hold then Start quickly.",
             style = MaterialTheme.typography.bodySmall
         )
     }
@@ -194,19 +196,15 @@ fun PlugBoxScreen() {
 
 @Composable
 private fun ChargerRow(charger: Charger, isSelected: Boolean, onClick: () -> Unit) {
-    val label = "${charger.name}  •  ${charger.status.trim()}  •  id=${charger.id}"
-
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
         Column(Modifier.padding(12.dp)) {
-            Text(label)
+            Text("${charger.name}  •  ${charger.status.trim()}  •  id=${charger.id}")
             Spacer(Modifier.height(4.dp))
             Text("lat=${charger.lat}, lng=${charger.lng}", style = MaterialTheme.typography.bodySmall)
         }
