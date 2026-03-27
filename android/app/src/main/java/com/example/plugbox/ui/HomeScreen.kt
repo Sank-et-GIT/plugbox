@@ -978,7 +978,7 @@ private fun HsNearestCard(
                             text = "Available Now",
                             color = MockGreen,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp
+                            fontSize = 12.sp
                         )
                     }
                 }
