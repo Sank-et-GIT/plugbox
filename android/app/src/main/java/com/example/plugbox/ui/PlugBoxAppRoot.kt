@@ -90,7 +90,10 @@ fun PlugBoxAppRoot(modifier: Modifier = Modifier) {
             when (tab) {
                 RootTab.HOME    -> PlugBoxHost(modifier = Modifier)
                 RootTab.WALLET  -> WalletScreen()
-                RootTab.STATUS  -> StatusScreen()
+                RootTab.STATUS  -> StatusScreen(
+                    onIveArrived    = { /* Phase 2: navigate to SessionScreen */ },
+                    onCancelBooking = { /* Phase 2: cancel API + go home */ }
+                )
                 RootTab.PROFILE -> ProfilePlaceholder()
             }
         }
