@@ -94,7 +94,7 @@ fun PlugBoxAppRoot(modifier: Modifier = Modifier) {
                     onIveArrived    = { /* Phase 2: navigate to SessionScreen */ },
                     onCancelBooking = { /* Phase 2: cancel API + go home */ }
                 )
-                RootTab.PROFILE -> ProfilePlaceholder()
+                RootTab.PROFILE -> ProfileScreen()
             }
         }
     }
