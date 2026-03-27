@@ -1,455 +1,441 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+// ─────────────────────────────────────────────────────────────────────────────
+// ChargerDetailScreen.kt
+//
+// PURPOSE:
+//   Shows full details of a selected charger — info row, package selection,
+//   wallet status, payment breakdown, and action buttons.
+//
+// CHANGES FROM PREVIOUS VERSION:
+//   • Security deposit card REMOVED — deposit is one-time at account opening,
+//     shown on Wallet screen instead. Not relevant at booking time.
+//   • Package cards: fixed height removed → content never clips
+//   • ₹/kWh rate replaced with short descriptions per package
+//   • "--km / --min" replaced with "Locating..." italic hint
+//   • Badge: green when selected, gray/muted when unselected
+//   • Wallet totalCost now only includes package price (no deposit)
+//   • Payment breakdown bottom spacer increased → never cuts off
+//
+// NAVIGATION:
+//   Entered from : HomeScreen (Book Now tap)
+//   Exits to     : HomeScreen (back), BookingConfirmedScreen (Proceed to pay)
+//
+// DATA:
+//   Phase 1 → UiCharger with hardcoded packages from UiAdapter, wallet ₹245 dummy
+//   Phase 2 → packages from API, wallet balance from user profile API
+//
+// ANIMATIONS:
+//   • Package card    → scale bounce on tap
+//   • Proceed to pay  → continuous subtle pulse
+//   • IDLE dot        → blinks green
+//
+// BACK:  Back arrow / swipe-from-left / hardware back → onBack()
+// ─────────────────────────────────────────────────────────────────────────────
 
 package com.example.plugbox.ui
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 
-/* -------------------------------------------------------
-   PlugBox Charger Detail Screen (UI-only, pixel-focused)
-   Reference: https://www.genspark.ai/api/files/s/otUmnNFa
--------------------------------------------------------- */
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION 1 — Color palette
+// ─────────────────────────────────────────────────────────────────────────────
 
-data class UiPackageOption(
-    val id: String,
-    val name: String,
-    val kwhText: String,   // "0.5 kWh"
-    val priceText: String, // "₹20"
-    val badgeText: String? = null // "Best value"
-)
+private val CdBg            = Color(0xFFF9FAFB)
+private val CdWhite         = Color(0xFFFFFFFF)
+private val CdGreen         = Color(0xFF16C784)
+private val CdGreenDark     = Color(0xFF12B76A)
+private val CdGreenTint     = Color(0xFFECFDF5)
+private val CdBlue          = Color(0xFF3B82F6)
+private val CdOrange        = Color(0xFFF59E0B)
+private val CdOrangeTint    = Color(0xFFFFF7ED)
+private val CdTextPrimary   = Color(0xFF111827)
+private val CdTextSecondary = Color(0xFF6B7280)
+private val CdDivider       = Color(0xFFE5E7EB)
+private val CdIdleBg        = Color(0xFFDCFCE7)
+private val CdInUseBg       = Color(0xFFFFF7ED)
+private val CdOfflineBg     = Color(0xFFF3F4F6)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION 3 — Main screen composable
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun ChargerDetailScreen(
-    // Keep your existing state/params; map them here.
-    title: String,
-    statusText: String, // "IDLE"
-    distanceText: String, // "0.8 km"
-    timeText: String,     // "4 min"
-    powerText: String,    // "1.5 kW"
-    socketsTitle: String, // "Sockets"
-    socketsValue: String, // "2/4"
-    packages: List<UiPackageOption>,
-    selectedPackageId: String,
-    depositAmountText: String, // "₹100"
-    depositNoteText: String,   // "(refundable)"
-    depositCaptionText: String, // "Shown in wallet as Locked Deposit"
-    tabSelected: TabSelection, // ChargeNow / BookSlot
-    onBackClick: () -> Unit,
-    onSelectPackage: (String) -> Unit,
-    onSelectTab: (TabSelection) -> Unit,
-    onNavigateClick: () -> Unit,
-    onProceedToPayClick: () -> Unit,
-    modifier: Modifier = Modifier
+    charger:        UiCharger,
+    onBack:         () -> Unit,
+    onNavigate:     () -> Unit,
+    onProceedToPay: (UiPackage) -> Unit,
+    modifier:       Modifier = Modifier
 ) {
-    // ===== Colors tuned to match reference =====
-    val bg = Color(0xFFF9FAFB)
-    val divider = Color(0xFFE5E7EB)
-    val textPrimary = Color(0xFF111827)
-    val textSecondary = Color(0xFF6B7280)
+    val context = LocalContext.current
 
-    val green = Color(0xFF16C784)
-    val greenDark = Color(0xFF12B76A)
-    val greenTint = Color(0xFFECFDF5)
+    // Auto-select "Best value" package on open
+    var selectedPkgId by remember(charger.id) {
+        mutableStateOf(
+            charger.packages.firstOrNull { it.badge != null }?.id
+                ?: charger.packages.firstOrNull()?.id
+                ?: ""
+        )
+    }
 
-    val blue = Color(0xFF3B82F6)
-    val idlePillBg = Color(0xFFE0F2FE)
-    val idleDot = Color(0xFF3B82F6)
+    val selectedPkg = charger.packages.firstOrNull { it.id == selectedPkgId }
 
-    val depositBg = Color(0xFFF3F4F6)
+    // Wallet: Phase 1 dummy, Phase 2 replace with real API value
+    // Deposit NOT included in cost shown here — it's charged once at account opening
+    val walletBalance = 245
+    val totalCost     = selectedPkg?.priceInr ?: 0
+    val hasSufficient = walletBalance >= totalCost
 
-    val cardRadius = 16.dp
-    val buttonRadius = 16.dp
+    BackHandler { onBack() }
 
     Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = bg,
+        modifier       = modifier.fillMaxSize(),
+        containerColor = CdBg,
+
+        // Compact top bar — no wasted space
         topBar = {
-            TopAppBar(
-                title = { /* Title is in content in the reference */ },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = "Back",
-                            tint = textPrimary
+            Row(
+                modifier              = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Go back", tint = CdTextPrimary)
+                }
+                CdStatusPill(status = charger.status)
+            }
+        },
+
+        bottomBar = {
+            CdBottomButtons(
+                selectedPackage     = selectedPkg,
+                onNavigateClick     = {
+                    val uri    = Uri.parse("google.navigation:q=${charger.lat},${charger.lng}&mode=d")
+                    val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                        setPackage("com.google.android.apps.maps")
+                    }
+                    runCatching { context.startActivity(intent) }.onFailure {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW,
+                                Uri.parse("https://maps.google.com/?daddr=${charger.lat},${charger.lng}"))
                         )
                     }
+                    onNavigate()
                 },
-                actions = {
-                    IdleStatusPill(
-                        text = statusText,
-                        background = idlePillBg,
-                        dotColor = idleDot,
-                        textColor = idleDot
-                    )
-                    Spacer(Modifier.width(16.dp))
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = bg
-                )
-            )
-        },
-        bottomBar = {
-            BottomStickyButtons(
-                onNavigateClick = onNavigateClick,
-                onProceedToPayClick = onProceedToPayClick,
-                blue = blue,
-                green = green,
-                greenDark = greenDark,
-                radius = buttonRadius
+                onProceedToPayClick = { pkg -> onProceedToPay(pkg) }
             )
         }
-    ) { padding ->
+
+    ) { scaffoldPadding ->
+
         Column(
-            Modifier
-                .padding(padding)
+            modifier = Modifier
+                .padding(scaffoldPadding)
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
         ) {
-            // Title
+
+            // Charger name — top = 0 because topBar Row already has vertical padding
             Text(
-                text = title,
-                modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 16.dp),
-                fontSize = 22.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = textPrimary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                text       = charger.name,
+                modifier   = Modifier.padding(horizontal = 16.dp).padding(top = 0.dp),
+                fontSize   = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color      = CdTextPrimary,
+                maxLines   = 2,
+                overflow   = TextOverflow.Ellipsis
             )
 
             Spacer(Modifier.height(16.dp))
-            HorizontalDivider(Modifier, thickness = 1.dp, color = divider)
+            HorizontalDivider(color = CdDivider)
 
-            // Info row (4 columns)
-            InfoRow4(
-                distanceText = distanceText,
-                timeText = timeText,
-                powerText = powerText,
-                socketsTitle = socketsTitle,
-                socketsValue = socketsValue,
-                divider = divider,
-                textPrimary = textPrimary
-            )
+            // Info row
+            CdInfoRow(charger = charger)
 
-            HorizontalDivider(Modifier, thickness = 1.dp, color = divider)
-
-            // Packages section title
-            Text(
-                text = "Packages",
-                modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 16.dp),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = textPrimary
-            )
-
+            HorizontalDivider(color = CdDivider)
             Spacer(Modifier.height(16.dp))
 
-            // Package cards row
+            // Packages heading
+            Text(
+                text       = "Packages",
+                modifier   = Modifier.padding(horizontal = 16.dp),
+                fontSize   = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color      = CdTextPrimary
+            )
+
+            Spacer(Modifier.height(14.dp))
+
+            // Package cards — wrapContentHeight so price is NEVER clipped
             Row(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                modifier              = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                packages.forEach { pkg ->
-                    val selected = pkg.id == selectedPackageId
-                    PackageCard(
-                        modifier = Modifier.weight(1f),
-                        pkg = pkg,
-                        selected = selected,
-                        onClick = { onSelectPackage(pkg.id) },
-                        borderColor = if (selected) green else divider,
-                        borderWidth = if (selected) 2.dp else 1.dp,
-                        background = if (selected) greenTint else Color.White,
-                        green = green,
-                        textPrimary = textPrimary,
-                        textSecondary = textSecondary,
-                        radius = cardRadius
+                charger.packages.forEach { pkg ->
+                    CdPackageCard(
+                        modifier   = Modifier.weight(1f),
+                        pkg        = pkg,
+                        isSelected = pkg.id == selectedPkgId,
+                        onClick    = { selectedPkgId = pkg.id }
                     )
                 }
             }
 
             Spacer(Modifier.height(16.dp))
 
-            // Security deposit card
-            SecurityDepositCard(
-                depositAmountText = depositAmountText,
-                depositNoteText = depositNoteText,
-                depositCaptionText = depositCaptionText,
-                background = depositBg,
-                divider = divider,
-                textPrimary = textPrimary,
-                textSecondary = textSecondary,
-                radius = cardRadius
-            )
+            // ── Merged summary card (just above pay button) ───────────────
+            // Package total + wallet status in one card — user sees everything
+            // in one glance before tapping Proceed to pay
+            if (selectedPkg != null) {
+                CdSummaryCard(
+                    pkg           = selectedPkg,
+                    walletBalance = walletBalance,
+                    hasSufficient = hasSufficient
+                )
+            }
 
-            Spacer(Modifier.height(16.dp))
-
-            // Toggle tabs
-            ToggleTabsRow(
-                selected = tabSelected,
-                onSelect = onSelectTab,
-                green = green,
-                textSecondary = textSecondary,
-                divider = divider
-            )
-
-            Spacer(Modifier.height(90.dp)) // space above bottom buttons (safe)
+            // Space so card clears the sticky bottom bar
+            Spacer(Modifier.height(100.dp))
         }
     }
 }
 
-/* ---------------- Top-right Status Pill ---------------- */
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION 4 — Status pill (IDLE dot blinks, others static)
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun IdleStatusPill(
-    text: String,
-    background: Color,
-    dotColor: Color,
-    textColor: Color
-) {
-    Surface(
-        color = background,
-        shape = RoundedCornerShape(999.dp),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .height(32.dp)
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(dotColor)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = text,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = textColor,
-                letterSpacing = 0.4.sp
-            )
+private fun CdStatusPill(status: ChargerStatus) {
+    val (bg, dotColor, label) = when (status) {
+        ChargerStatus.IDLE     -> Triple(CdIdleBg,    CdGreen,          "Available Now")
+        ChargerStatus.IN_USE   -> Triple(CdInUseBg,   CdOrange,         "IN USE")
+        ChargerStatus.RESERVED -> Triple(CdInUseBg,   CdBlue,           "RESERVED")
+        ChargerStatus.OFFLINE  -> Triple(CdOfflineBg, CdTextSecondary,  "OFFLINE")
+    }
+
+    Surface(color = bg, shape = RoundedCornerShape(999.dp),
+        tonalElevation = 0.dp, shadowElevation = 0.dp) {
+        Row(Modifier.height(32.dp).padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+
+            if (status == ChargerStatus.IDLE) {
+                val inf   = rememberInfiniteTransition(label = "idleBlink")
+                val alpha by inf.animateFloat(
+                    0.2f, 1.0f,
+                    infiniteRepeatable(tween(600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+                    "dotAlpha"
+                )
+                Box(Modifier.size(8.dp).clip(RoundedCornerShape(999.dp))
+                    .background(dotColor.copy(alpha = alpha)))
+            } else {
+                Box(Modifier.size(8.dp).clip(RoundedCornerShape(999.dp)).background(dotColor))
+            }
+
+            Spacer(Modifier.width(6.dp))
+            Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = dotColor)
         }
     }
 }
 
-/* ---------------- Info Row (4 columns) ---------------- */
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION 5 — Info row (Distance | ETA | Power | Sockets)
+//
+// "Locating..." shown in italic when GPS hasn't loaded yet (distanceKm = 0)
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun InfoRow4(
-    distanceText: String,
-    timeText: String,
-    powerText: String,
-    socketsTitle: String,
-    socketsValue: String,
-    divider: Color,
-    textPrimary: Color
-) {
+private fun CdInfoRow(charger: UiCharger) {
+    val locating = charger.distanceKm <= 0.0
+
+    val distanceLabel = when {
+        locating                 -> "Locating..."
+        charger.distanceKm < 1.0 -> "${(charger.distanceKm * 1000).roundToInt()} m"
+        else                     -> "${"%.1f".format(charger.distanceKm)} km"
+    }
+    val etaLabel = when {
+        locating           -> "Locating..."
+        charger.etaMin > 0 -> "${charger.etaMin} min"
+        else -> "${((charger.distanceKm / 25.0) * 60).roundToInt().coerceAtLeast(1)} min"
+    }
+
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .heightIn(min = 64.dp)
-            .padding(vertical = 12.dp),
+        modifier          = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(80.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        InfoMetricItem(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Outlined.Place,
-            line1 = distanceText,
-            line2 = null,
-            textPrimary = textPrimary
+        // Distance — italic when locating
+        CdInfoColumn(
+            modifier   = Modifier.weight(1f),
+            icon       = Icons.Outlined.Place,
+            value      = distanceLabel,
+            label      = "Distance",
+            isLocating = locating
         )
-
-        VerticalDivider(divider)
-
-        InfoMetricItem(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Outlined.Schedule,
-            line1 = timeText,
-            line2 = null,
-            textPrimary = textPrimary
+        CdVerticalDivider()
+        // ETA — italic when locating
+        CdInfoColumn(
+            modifier   = Modifier.weight(1f),
+            icon       = Icons.Outlined.Schedule,
+            value      = etaLabel,
+            label      = "ETA",
+            isLocating = locating
         )
-
-        VerticalDivider(divider)
-
-        InfoMetricItem(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Outlined.Bolt,
-            line1 = powerText,
-            line2 = null,
-            textPrimary = textPrimary
-        )
-
-        VerticalDivider(divider)
-
-        InfoMetricItem(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Outlined.ElectricalServices,
-            line1 = socketsTitle,
-            line2 = socketsValue,
-            textPrimary = textPrimary
-        )
+        CdVerticalDivider()
+        CdInfoColumn(Modifier.weight(1f), Icons.Outlined.Bolt,
+            "${charger.powerKw} kW", "Power")
+        CdVerticalDivider()
+        CdInfoColumn(Modifier.weight(1f), Icons.Outlined.ElectricalServices,
+            "${charger.socketsAvailable}/${charger.socketsTotal}", "Sockets")
     }
 }
 
 @Composable
-private fun VerticalDivider(color: Color) {
-    Box(
-        modifier = Modifier
-            .width(1.dp)
-            .fillMaxHeight()
-            .background(color)
-    )
-}
-
-@Composable
-private fun InfoMetricItem(
-    modifier: Modifier,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    line1: String,
-    line2: String?,
-    textPrimary: Color
+private fun CdInfoColumn(
+    modifier:   Modifier,
+    icon:       ImageVector,
+    value:      String,
+    label:      String,
+    isLocating: Boolean = false
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = textPrimary,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(Modifier.height(4.dp))
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center) {
+        Icon(icon, null, tint = CdTextSecondary, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
-            text = line1,
-            fontSize = 14.sp,
-            color = textPrimary,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            text       = value,
+            fontSize   = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontStyle  = if (isLocating) FontStyle.Italic else FontStyle.Normal,
+            color      = if (isLocating) CdTextSecondary else CdTextPrimary,
+            textAlign  = TextAlign.Center,
+            maxLines   = 1
         )
-        if (line2 != null) {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = line2,
-                fontSize = 14.sp,
-                color = textPrimary,
-                textAlign = TextAlign.Center,
-                maxLines = 1
-            )
-        }
+        Text(
+            text      = label,
+            fontSize  = 12.sp,
+            color     = CdTextSecondary,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
-/* ---------------- Packages Cards ---------------- */
+@Composable
+private fun CdVerticalDivider() {
+    Box(Modifier.fillMaxHeight().width(1.dp).background(CdDivider))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION 6 — Package card
+//
+// KEY CHANGES:
+//   • heightIn(min=150.dp) instead of fixed height(160.dp) → price never clips
+//   • Short description instead of ₹/kWh
+//   • Badge: green bg when SELECTED, muted gray when UNSELECTED
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun PackageCard(
-    modifier: Modifier,
-    pkg: UiPackageOption,
-    selected: Boolean,
-    onClick: () -> Unit,
-    borderColor: Color,
-    borderWidth: Dp,
-    background: Color,
-    green: Color,
-    textPrimary: Color,
-    textSecondary: Color,
-    radius: Dp
+private fun CdPackageCard(
+    modifier:   Modifier,
+    pkg:        UiPackage,
+    isSelected: Boolean,
+    onClick:    () -> Unit
 ) {
+    var pressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue   = if (pressed) 0.96f else 1.0f,
+        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh),
+        label         = "pkgScale"
+    )
+
     Surface(
         modifier = modifier
-            .heightIn(min = 142.dp)
-            .clickable(onClick = onClick),
-        color = background,
-        shape = RoundedCornerShape(radius),
-        shadowElevation = 6.dp,
-        border = BorderStroke(borderWidth, borderColor)
+            .scale(scale)
+            .heightIn(min = 150.dp)   // min height, never fixed — content drives actual height
+            .clickable { pressed = true; onClick(); pressed = false },
+        color           = if (isSelected) CdGreenTint else CdWhite,
+        shape           = RoundedCornerShape(14.dp),
+        shadowElevation = if (isSelected) 14.dp else 2.dp,
+        border          = BorderStroke(
+            if (isSelected) 2.dp else 1.dp,
+            if (isSelected) CdGreen else CdDivider
+        )
     ) {
-        Box(Modifier.fillMaxSize()) {
-            // Badge (top-right) for selected "Best value"
-            if (pkg.badgeText != null && selected) {
+        Box(Modifier.fillMaxWidth()) {
+
+            // Badge — always green regardless of selection
+            // "Best value" should always stand out — it's factual info, not selection state
+            if (pkg.badge != null) {
                 Surface(
-                    color = green,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 10.dp, end = 10.dp)
+                    color    = CdGreen,
+                    shape    = RoundedCornerShape(8.dp),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp)
                 ) {
                     Text(
-                        text = pkg.badgeText,
-                        color = Color.White,
-                        fontSize = 12.sp,
+                        text       = pkg.badge,
+                        color      = Color.White,
+                        fontSize   = 10.sp,
                         fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        modifier   = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                     )
                 }
             }
 
-            Column(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth()
-            ) {
-                // Custom radio indicator
-                PackageRadio(selected = selected, green = green)
+            Column(Modifier.padding(14.dp).fillMaxWidth()) {
+
+                // Radio indicator
+                CdRadioIndicator(isSelected)
 
                 Spacer(Modifier.height(12.dp))
 
-                Text(
-                    text = pkg.name,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = textPrimary
-                )
+                // Package name
+                Text(pkg.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                    color = CdTextPrimary)
 
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
 
-                Text(
-                    text = pkg.kwhText,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = textSecondary
-                )
+                // kWh amount — simple, no rate
+                Text("${pkg.kwhLimit} kWh", fontSize = 13.sp, color = CdTextSecondary)
 
                 Spacer(Modifier.height(10.dp))
 
+                // Price — green when selected, dark otherwise
                 Text(
-                    text = pkg.priceText,
-                    fontSize = 18.sp,
+                    "₹${pkg.priceInr}",
+                    fontSize   = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = textPrimary
+                    color      = if (isSelected) CdGreen else CdTextPrimary
                 )
             }
         }
@@ -457,179 +443,177 @@ private fun PackageCard(
 }
 
 @Composable
-private fun PackageRadio(selected: Boolean, green: Color) {
-    val border = if (selected) green else Color(0xFFD1D5DB)
+private fun CdRadioIndicator(isSelected: Boolean) {
     Box(
         modifier = Modifier
             .size(22.dp)
             .clip(RoundedCornerShape(999.dp))
-            .border(2.dp, border, RoundedCornerShape(999.dp)),
+            .border(2.dp,
+                if (isSelected) CdGreen else Color(0xFFD1D5DB),
+                RoundedCornerShape(999.dp)),
         contentAlignment = Alignment.Center
     ) {
-        if (selected) {
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(green)
-            )
+        if (isSelected) {
+            Box(Modifier.size(10.dp).clip(RoundedCornerShape(999.dp)).background(CdGreen))
         }
     }
 }
 
-/* ---------------- Security Deposit Card ---------------- */
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION 7 — Summary card (merged payment + wallet)
+//
+// Sits just above the Proceed to pay button.
+// User sees: package, total, wallet status — one card, one decision.
+//
+// Layout:
+//   Package name · kWh          ₹XX
+//   ────────────────────────────────
+//   Total payable               ₹XX   ← bold green
+//   ────────────────────────────────
+//   💳 Wallet ₹245    ✓ Ready to pay  ← or orange "Add ₹X"
+//
+// Phase 1: walletBalance hardcoded
+// Phase 2: pass real balance from user profile API
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun SecurityDepositCard(
-    depositAmountText: String,
-    depositNoteText: String,
-    depositCaptionText: String,
-    background: Color,
-    divider: Color,
-    textPrimary: Color,
-    textSecondary: Color,
-    radius: Dp
+private fun CdSummaryCard(
+    pkg:           UiPackage,
+    walletBalance: Int,
+    hasSufficient: Boolean
 ) {
+    val total       = pkg.priceInr
+    val shortfall   = total - walletBalance
+    val accentColor = if (hasSufficient) CdGreen else CdOrange
+
     Surface(
-        modifier = Modifier
-            .padding(horizontal = 16.dp)
-            .fillMaxWidth(),
-        color = background,
-        shape = RoundedCornerShape(radius),
-        shadowElevation = 6.dp,
-        border = BorderStroke(1.dp, divider)
+        modifier        = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
+        color           = CdWhite,
+        shape           = RoundedCornerShape(16.dp),
+        border          = BorderStroke(1.dp, CdDivider),
+        shadowElevation = 3.dp
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text(
-                text = "Security deposit",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = textPrimary
-            )
 
-            Spacer(Modifier.height(12.dp))
-
-            Row(verticalAlignment = Alignment.Bottom) {
+            // Package line
+            Row(
+                Modifier.fillMaxWidth(),
+                Arrangement.SpaceBetween,
+                Alignment.CenterVertically
+            ) {
                 Text(
-                    text = depositAmountText,
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = textPrimary
+                    text     = "${pkg.name}  ·  ${pkg.kwhLimit} kWh",
+                    fontSize = 13.sp,
+                    color    = CdTextSecondary
                 )
-                Spacer(Modifier.width(8.dp))
                 Text(
-                    text = depositNoteText,
-                    fontSize = 14.sp,
-                    color = textSecondary
+                    text       = "₹${pkg.priceInr}",
+                    fontSize   = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color      = CdTextPrimary
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
-            HorizontalDivider(Modifier, thickness = 1.dp, color = divider)
-            Spacer(Modifier.height(12.dp))
+            HorizontalDivider(Modifier.padding(vertical = 10.dp), color = CdDivider)
 
-            Text(
-                text = depositCaptionText,
-                fontSize = 13.sp,
-                color = textSecondary
-            )
+            // Total payable — bold, green
+            Row(
+                Modifier.fillMaxWidth(),
+                Arrangement.SpaceBetween,
+                Alignment.CenterVertically
+            ) {
+                Text(
+                    text       = "Total payable",
+                    fontSize   = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color      = CdTextPrimary
+                )
+                Text(
+                    text       = "₹$total",
+                    fontSize   = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color      = CdGreen
+                )
+            }
+
+            HorizontalDivider(Modifier.padding(vertical = 10.dp), color = CdDivider)
+
+            // Wallet status row
+            Row(
+                modifier          = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Wallet icon + balance
+                Icon(
+                    Icons.Outlined.AccountBalanceWallet,
+                    contentDescription = null,
+                    tint     = CdTextSecondary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text     = "Wallet  ₹$walletBalance",
+                    fontSize = 13.sp,
+                    color    = CdTextSecondary
+                )
+
+                Spacer(Modifier.weight(1f))
+
+                // Status pill — green or orange
+                Surface(
+                    color = accentColor.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(999.dp)
+                ) {
+                    Row(
+                        modifier          = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (hasSufficient)
+                                Icons.Outlined.CheckCircle
+                            else
+                                Icons.Outlined.AddCircle,
+                            contentDescription = null,
+                            tint     = accentColor,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text       = if (hasSufficient) "Ready to pay" else "Add ₹$shortfall",
+                            fontSize   = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color      = accentColor
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
-/* ---------------- Toggle Tabs ---------------- */
-
-enum class TabSelection { ChargeNow, BookSlot }
-
-@Composable
-private fun ToggleTabsRow(
-    selected: TabSelection,
-    onSelect: (TabSelection) -> Unit,
-    green: Color,
-    textSecondary: Color,
-    divider: Color
-) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .padding(horizontal = 16.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TabText(
-                text = "Charge now",
-                selected = selected == TabSelection.ChargeNow,
-                onClick = { onSelect(TabSelection.ChargeNow) },
-                selectedColor = green,
-                unselectedColor = textSecondary,
-                modifier = Modifier.weight(1f)
-            )
-            TabText(
-                text = "Book slot",
-                selected = selected == TabSelection.BookSlot,
-                onClick = { onSelect(TabSelection.BookSlot) },
-                selectedColor = green,
-                unselectedColor = textSecondary,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        // Indicator line (2dp) under selected tab; matches reference
-        Box(
-            modifier = Modifier
-                .padding(horizontal = 16.dp)
-                .fillMaxWidth()
-                .height(2.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(0.5f)
-                    .align(if (selected == TabSelection.ChargeNow) Alignment.CenterStart else Alignment.CenterEnd)
-                    .background(green)
-            )
-        }
-
-        HorizontalDivider(Modifier, thickness = 1.dp, color = divider)
-    }
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION 9 — Sticky bottom buttons
+//
+// Navigate    → OutlinedButton blue (secondary)
+// Proceed pay → Gradient green + pulse (only primary CTA)
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun TabText(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    selectedColor: Color,
-    unselectedColor: Color,
-    modifier: Modifier
+private fun CdBottomButtons(
+    selectedPackage:     UiPackage?,
+    onNavigateClick:     () -> Unit,
+    onProceedToPayClick: (UiPackage) -> Unit
 ) {
-    Text(
-        text = text,
-        modifier = modifier
-            .padding(vertical = 12.dp)
-            .clickable(onClick = onClick),
-        textAlign = TextAlign.Center,
-        fontSize = 15.sp,
-        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-        color = if (selected) selectedColor else unselectedColor
+    val canPay = selectedPackage != null
+
+    val inf      = rememberInfiniteTransition(label = "payPulse")
+    val payScale by inf.animateFloat(
+        1.0f, 1.03f,
+        infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        "payScale"
     )
-}
 
-/* ---------------- Bottom Sticky Buttons ---------------- */
-
-@Composable
-private fun BottomStickyButtons(
-    onNavigateClick: () -> Unit,
-    onProceedToPayClick: () -> Unit,
-    blue: Color,
-    green: Color,
-    greenDark: Color,
-    radius: Dp
-) {
-    Surface(
-        color = Color(0xFFF9FAFB),
-        shadowElevation = 8.dp
-    ) {
+    Surface(color = CdBg, shadowElevation = 10.dp) {
         Row(
             modifier = Modifier
                 .navigationBarsPadding()
@@ -638,62 +622,59 @@ private fun BottomStickyButtons(
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            GradientButton(
-                text = "Navigate",
-                brush = Brush.linearGradient(listOf(blue, blue)),
-                onClick = onNavigateClick,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(56.dp),
-                radius = radius
-            )
 
-            GradientButton(
-                text = "Proceed to pay",
-                brush = Brush.linearGradient(listOf(green, greenDark)),
-                onClick = onProceedToPayClick,
+            // Navigate — outlined blue
+            OutlinedButton(
+                onClick  = onNavigateClick,
+                modifier = Modifier.weight(1f).height(56.dp),
+                shape    = RoundedCornerShape(14.dp),
+                border   = BorderStroke(1.5.dp, CdBlue),
+                colors   = ButtonDefaults.outlinedButtonColors(contentColor = CdBlue)
+            ) {
+                Icon(Icons.Outlined.Navigation, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Navigate", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
+
+            // Proceed to pay — gradient + pulse
+            Box(
                 modifier = Modifier
                     .weight(1.6f)
-                    .height(56.dp),
-                radius = radius
-            )
-        }
-    }
-}
-
-@Composable
-private fun GradientButton(
-    text: String,
-    brush: Brush,
-    onClick: () -> Unit,
-    modifier: Modifier,
-    radius: Dp
-) {
-    // Material3 button semantics + gradient background.
-    Button(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(radius),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color.Transparent,
-            contentColor = Color.White
-        ),
-        contentPadding = PaddingValues(0.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape(radius))
-                .background(brush),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = text,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White
-            )
+                    .height(56.dp)
+                    .scale(if (canPay) payScale else 1f)
+            ) {
+                Button(
+                    onClick        = { selectedPackage?.let { onProceedToPayClick(it) } },
+                    enabled        = canPay,
+                    modifier       = Modifier.fillMaxSize(),
+                    shape          = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    colors         = ButtonDefaults.buttonColors(
+                        containerColor         = Color.Transparent,
+                        contentColor           = Color.White,
+                        disabledContainerColor = Color(0xFFCBD5E1),
+                        disabledContentColor   = Color.White
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                if (canPay)
+                                    Brush.horizontalGradient(listOf(CdGreen, CdGreenDark))
+                                else
+                                    Brush.horizontalGradient(
+                                        listOf(Color(0xFFCBD5E1), Color(0xFFCBD5E1)))
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Proceed to pay", fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold, color = Color.White)
+                    }
+                }
+            }
         }
     }
 }
