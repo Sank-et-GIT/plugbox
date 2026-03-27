@@ -442,7 +442,7 @@ private fun ChargerCard(
 }
 /* -----------------------------
    SCREEN 3: SessionScreen (6 states)
--------------------------------- */
+-------------------------------- *//*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -668,7 +668,7 @@ fun SessionScreen(
                         )
                         Spacer(Modifier.height(10.dp))
                         OutlinedButton(
-                            onClick = { /* support callback if you add */ },
+                            onClick = { *//* support callback if you add *//* },
                             shape = RoundedCornerShape(999.dp),
                             modifier = Modifier.fillMaxWidth().height(54.dp)
                         ) {
@@ -729,9 +729,9 @@ fun SessionScreen(
     }
 }
 
-/* -----------------------------
+*//* -----------------------------
    Session UI pieces
--------------------------------- */
+-------------------------------- *//*
 
 private enum class SessionStep {
     BOOKED,
@@ -991,9 +991,9 @@ private fun ThankYouDialog(
     )
 }
 
-/* -----------------------------
+*//* -----------------------------
    Swipe-to-generate control (UI-only)
--------------------------------- */
+-------------------------------- *//*
 
 @Composable
 private fun SwipeToGenerateCode(
@@ -1014,9 +1014,9 @@ private fun SwipeToGenerateCode(
     }
 }
 
-/* -----------------------------
+*//* -----------------------------
    PREVIEWS (Dummy data)
--------------------------------- */
+-------------------------------- *//*
 
 private fun sampleCharger(): UiCharger = UiCharger(
     id = "c1",
@@ -1122,4 +1122,4 @@ private fun Preview_Session_Charging() {
             onDone = {}
         )
     }
-}
+}*/

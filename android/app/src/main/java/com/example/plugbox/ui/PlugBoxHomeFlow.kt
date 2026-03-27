@@ -3,18 +3,15 @@
 //
 // PURPOSE:
 //   Navigation state machine for the Home tab.
-//   No NavHost — simple enum-driven screen switching.
-//   Each screen gets exactly what it needs, nothing more.
+//   Simple enum-driven switching — no NavHost, no back stack library.
 //
-// CURRENT FLOW (Phase 1 — UI only):
-//   LIST → DETAIL → CONFIRMED
-//
-// COMING (Phase 2):
-//   CONFIRMED → SESSION (after Hold API + I've Arrived)
+// FLOW:
+//   LIST → DETAIL → CONFIRMED → SESSION
 //
 // API CALLS:
 //   Phase 1 → chargers loaded on launch (real API)
 //   Phase 2 → Hold API on Proceed to pay, Start API on I've Arrived
+//             (marked with TODO comments below)
 // ─────────────────────────────────────────────────────────────────────────────
 
 package com.example.plugbox.ui
@@ -27,10 +24,10 @@ import com.example.plugbox.network.ApiClient
 private const val TAG = "PlugBoxFlow"
 
 private enum class Screen {
-    LIST,       // HomeMapScreen — charger map + list
-    DETAIL,     // ChargerDetailScreen — packages, deposit, pay
-    CONFIRMED,  // BookingConfirmedScreen — timer, maps, arrived
-    // SESSION  ← Phase 2: SessionScreen
+    LIST,       // HomeMapScreen
+    DETAIL,     // ChargerDetailScreen
+    CONFIRMED,  // BookingConfirmedScreen
+    SESSION     // SessionScreen
 }
 
 @Composable
@@ -42,7 +39,7 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
     var chargers        by remember { mutableStateOf<List<UiCharger>>(emptyList()) }
     var filtered        by remember { mutableStateOf<List<UiCharger>>(emptyList()) }
 
-    // Load chargers once on launch — real API call
+    // Load chargers once on launch
     LaunchedEffect(Unit) {
         try {
             val res    = ApiClient.api.chargers()
@@ -53,6 +50,12 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load chargers: ${e.message}", e)
         }
+    }
+
+    // Helper: clear booking state and go home
+    fun resetAndGoHome() {
+        selectedPackage = null
+        screen          = Screen.LIST
     }
 
     when (screen) {
@@ -88,13 +91,12 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
             ChargerDetailScreen(
                 charger        = sel,
                 onBack         = { screen = Screen.LIST },
-                onNavigate     = { /* Maps intent handled inside ChargerDetailScreen */ },
+                onNavigate     = { /* Maps intent handled inside screen */ },
                 onProceedToPay = { pkg ->
-                    // Save selected package for use on BookingConfirmedScreen
                     selectedPackage = pkg
                     Log.d(TAG, "→ CONFIRMED: ${pkg.name} ₹${pkg.priceInr}")
-                    // Phase 2: call Hold API here before navigating
-                    // scope.launch { ApiClient.api.hold(HoldRequest(...)) }
+                    // TODO Phase 2: call Hold API here
+                    // scope.launch { ApiClient.api.hold(HoldRequest(sel.id.toInt(), userId)) }
                     screen = Screen.CONFIRMED
                 }
             )
@@ -110,21 +112,36 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
                 pkg          = pkg,
                 onIveArrived = {
                     Log.d(TAG, "→ SESSION: user arrived at ${sel.name}")
-                    // Phase 2: call Start API here, then navigate to SESSION
-                    // scope.launch { ApiClient.api.start(StartRequest(...)) }
-                    // screen = Screen.SESSION
+                    // TODO Phase 2: call Start API here
+                    // scope.launch { ApiClient.api.start(StartRequest(sel.id.toInt(), userId)) }
+                    screen = Screen.SESSION
                 },
                 onCancelBooking = {
-                    // User confirmed cancel — clear selection and go home
-                    Log.d(TAG, "Booking cancelled")
-                    selectedPackage = null
-                    screen          = Screen.LIST
+                    Log.d(TAG, "Booking cancelled by user")
+                    resetAndGoHome()
                 },
                 onTimerExpired = {
-                    // 10 minutes up — auto-cancel, go home
-                    Log.d(TAG, "Grace period expired")
-                    selectedPackage = null
-                    screen          = Screen.LIST
+                    Log.d(TAG, "Grace period expired — auto cancel")
+                    resetAndGoHome()
+                }
+            )
+        }
+
+        // ── 4. SESSION ────────────────────────────────────────────────────────
+        Screen.SESSION -> {
+            val sel = selected        ?: run { screen = Screen.LIST; return }
+            val pkg = selectedPackage ?: run { screen = Screen.LIST; return }
+
+            SessionScreen(
+                charger  = sel,
+                pkg      = pkg,
+                onDone   = {
+                    Log.d(TAG, "Session complete → Home")
+                    resetAndGoHome()
+                },
+                onCancel = {
+                    Log.d(TAG, "Session cancelled → Home")
+                    resetAndGoHome()
                 }
             )
         }
