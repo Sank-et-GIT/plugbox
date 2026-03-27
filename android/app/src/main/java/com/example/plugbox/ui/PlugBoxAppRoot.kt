@@ -89,7 +89,7 @@ fun PlugBoxAppRoot(modifier: Modifier = Modifier) {
         Box(modifier = Modifier.padding(padding)) {
             when (tab) {
                 RootTab.HOME    -> PlugBoxHost(modifier = Modifier)
-                RootTab.WALLET  -> WalletPlaceholder()
+                RootTab.WALLET  -> WalletScreen()
                 RootTab.STATUS  -> StatusPlaceholder()
                 RootTab.PROFILE -> ProfilePlaceholder()
             }
