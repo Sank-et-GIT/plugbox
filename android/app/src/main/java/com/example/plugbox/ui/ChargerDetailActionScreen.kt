@@ -1,3 +1,4 @@
+/*
 package com.example.plugbox.ui
 
 import androidx.compose.foundation.layout.*
@@ -81,4 +82,4 @@ fun ChargerDetailActionScreen(
             }
         }
     }
-}
+}*/

@@ -83,3 +83,17 @@ android/gradle/gradle-daemon-jvm.properties
 **/*.dll
 **/*.exe
 **/*.dSYM/
+
+
+# --- IGNORE FIREBASE_SERVICE_ACCOUNT.JSON ---
+firebase-service-account.json
+
+backend/node_modules/
+backend/.env
+backend/firebase-service-account.json
+backend/*firebase-adminsdk*.json
+
+backend/node_modules/
+backend/.env
+backend/*.json
+!android/app/google-services.json

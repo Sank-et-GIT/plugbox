@@ -1,29 +1,61 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// UiAdapter.kt
+//
+// PURPOSE:
+//   Converts raw API Charger objects (from network layer) into UiCharger objects
+//   (used by all screens). This is the single place where API data becomes UI data.
+//
+// PACKAGES:
+//   Phase 1 → hardcoded default packages (3 packages matching mockup)
+//   Phase 2 → will come from API per-charger response
+//
+// STATUS MAPPING:
+//   Backend sends: "IDLE", "IN_USE", "RESERVED", "OFFLINE"
+//   "ONLINE" kept as legacy fallback (old backend version)
+// ─────────────────────────────────────────────────────────────────────────────
+
 package com.example.plugbox.ui
 
 import com.example.plugbox.network.Charger
 
-private fun chargerStatusFromApi(status: String): ChargerStatus {
-    return when (status.trim().uppercase()) {
+// ── Status mapping ────────────────────────────────────────────────────────────
+private fun chargerStatusFromApi(status: String): ChargerStatus =
+    when (status.trim().uppercase()) {
         "IDLE"     -> ChargerStatus.IDLE
+        "ONLINE"   -> ChargerStatus.IDLE      // legacy fallback
         "IN_USE"   -> ChargerStatus.IN_USE
         "RESERVED" -> ChargerStatus.RESERVED
         "OFFLINE"  -> ChargerStatus.OFFLINE
-        "ONLINE"   -> ChargerStatus.IDLE      // legacy fallback
         else       -> ChargerStatus.OFFLINE
     }
-}
 
-// Default packages — same for all chargers until backend adds per-charger packages
+// ── Default packages (Phase 1 — hardcoded, matching mockup) ──────────────────
+// Phase 2: remove this and use packages from API response
 private val defaultPackages = listOf(
-    UiPackage(id = "p1", name = "Mini",     kwhLimit = 0.5, priceInr = 20),
-    UiPackage(id = "p2", name = "Standard", kwhLimit = 1.0, priceInr = 40, badge = "Best value"),
-    UiPackage(id = "p3", name = "Plus",     kwhLimit = 1.5, priceInr = 55)
+    UiPackage(
+        id       = "pkg_mini",
+        name     = "Mini",
+        kwhLimit = 0.5,
+        priceInr = 20
+    ),
+    UiPackage(
+        id       = "pkg_standard",
+        name     = "Standard",
+        kwhLimit = 1.0,
+        priceInr = 40,
+        badge    = "Best value"   // auto-selected on ChargerDetailScreen
+    ),
+    UiPackage(
+        id       = "pkg_plus",
+        name     = "Plus",
+        kwhLimit = 1.5,
+        priceInr = 55
+    )
 )
 
-fun Charger.toUiCharger(): UiCharger {
-    val uiStatus = chargerStatusFromApi(status)
-
-    val lastSeenText = lastSeenSecondsAgo?.let { secs ->
+// ── Last seen label ───────────────────────────────────────────────────────────
+private fun lastSeenLabel(secondsAgo: Long?): String =
+    secondsAgo?.let { secs ->
         when {
             secs < 60   -> "Just now"
             secs < 3600 -> "${secs / 60} min ago"
@@ -31,12 +63,15 @@ fun Charger.toUiCharger(): UiCharger {
         }
     } ?: ""
 
+// ── Main mapper: Charger (API) → UiCharger (UI) ──────────────────────────────
+fun Charger.toUiCharger(): UiCharger {
+    val uiStatus = chargerStatusFromApi(status)
     return UiCharger(
         id               = id.toString(),
         name             = name,
-        address          = lastSeenText,
-        distanceKm       = 0.0,          // calculated from GPS in HomeScreen
-        etaMin           = 0,            // calculated from distance later
+        address          = lastSeenLabel(lastSeenSecondsAgo),
+        distanceKm       = 0.0,          // filled by HomeScreen GPS
+        etaMin           = 0,            // calculated in ChargerDetailScreen
         powerKw          = 1.5,
         socketsAvailable = if (uiStatus == ChargerStatus.IDLE) 1 else 0,
         socketsTotal     = 1,

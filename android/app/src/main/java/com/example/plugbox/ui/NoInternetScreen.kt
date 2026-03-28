@@ -26,10 +26,10 @@ import androidx.compose.ui.unit.sp
 import com.example.plugbox.R
 
 // ── LIGHT PALETTE (Amazon-style) ──────────────────────────────
-private val PageBg        = Color(0xFFF5F5F0)   // Amazon's warm off-white
+private val PageBg        = Color(0xFFFFFFFF)   // White Background for screen
 private val TextDark      = Color(0xFF131921)   // Amazon's near-black
 private val TextGray      = Color(0xFF565959)   // Amazon secondary text
-private val TextLight     = Color(0xFF999999)   // subtle tip text
+private val TextLight     = Color(0xFF999999)   // Subtle tip text
 private val ButtonBg      = Color(0xFFE7E9EC)   // Amazon's gray button
 private val ButtonText    = Color(0xFF0F1111)   // Amazon button text
 private val DividerGray   = Color(0xFFDDDDDD)
@@ -250,7 +250,7 @@ fun NoInternetScreen(onRetry: () -> Unit) {
 
             // ── BOTTOM BRAND LABEL ────────────────────────
             Text(
-                "PlugBox",
+                "PlugBox 1.0",
                 fontSize = 11.sp,
                 color    = TextLight
             )

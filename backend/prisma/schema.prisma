@@ -1,8 +1,13 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// ─────────────────────────────────────────────────────────────────────────────
+// schema.prisma
+//
+// CHANGES FROM PREVIOUS VERSION:
+//   • OtpLog model REMOVED — Firebase handles OTP, we don't store it
+//   • User model KEPT — we still store phone, name, createdAt in our DB
+//
+// After editing run:
+//   npx prisma migrate dev --name add_user_firebase_auth
+// ─────────────────────────────────────────────────────────────────────────────
 
 datasource db {
   provider = "postgresql"
@@ -12,6 +17,28 @@ datasource db {
 generator client {
   provider = "prisma-client-js"
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User
+// phone = verified by Firebase (format: +91XXXXXXXXXX)
+// firebaseUid = Firebase's uid — useful for future Firebase features
+// userId in Booking/Session maps to this User's id (UUID string)
+// ─────────────────────────────────────────────────────────────────────────────
+model User {
+  id          String   @id @default(uuid())
+  phone       String   @unique
+  firebaseUid String   @unique         // Firebase uid from idToken
+  name        String   @default("")    // set in signup step 3
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([phone])
+  @@index([firebaseUid])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXISTING — untouched
+// ─────────────────────────────────────────────────────────────────────────────
 
 model Charger {
   id        Int       @id @default(autoincrement())
@@ -74,8 +101,8 @@ model Session {
   userId    String
   status    SessionStatus @default(CREATED)
 
-  startedAt  DateTime?
-  endedAt    DateTime?
+  startedAt DateTime?
+  endedAt   DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -93,7 +120,6 @@ model DeviceCommand {
   type      CommandType
   status    CommandStatus @default(PENDING)
 
-  // optional metadata (future use)
   payload Json?
 
   createdAt DateTime  @default(now())

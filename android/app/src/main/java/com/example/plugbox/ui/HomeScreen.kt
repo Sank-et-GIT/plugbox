@@ -2,76 +2,154 @@ package com.example.plugbox.ui
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.location.Location
-import kotlin.math.roundToInt
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import android.content.IntentSender
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.Shader
+import android.location.Location
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Power
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.LocationSettingsRequest
-import com.google.android.gms.location.SettingsClient
+import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.*
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.Polyline
+import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import kotlin.math.*
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 
-// ── COLORS matching the mockup ────────────────────────────────
-private val MockGreen      = Color(0xFF16C784)
-private val MockGreenBg    = Color(0xFFECFDF5)
-private val MockBlue       = Color(0xFF3B82F6)
-private val MockOrange     = Color(0xFFF59E0B)
-private val MockGray       = Color(0xFF64748B)
-private val MockRed        = Color(0xFFEF4444)
-private val MockHandle     = Color(0xFFCBD5E1)
-private val MockTextMain   = Color(0xFF0B1220)
+// ──────────────────────────────────────────────────────────────
+// Theme colors used across this screen
+// ──────────────────────────────────────────────────────────────
+private val MockGreen = Color(0xFF16C784)
+private val MockGreenBg = Color(0xFFECFDF5)
+private val MockBlue = Color(0xFF3B82F6)
+private val MockOrange = Color(0xFFF59E0B)
+private val MockGray = Color(0xFF64748B)
+private val MockRed = Color(0xFFEF4444)
+private val MockHandle = Color(0xFFCBD5E1)
+private val MockTextMain = Color(0xFF0B1220)
 
+// Bottom-sheet states
 private enum class HsSheet { FULL_MAP, COLLAPSED, HALF, EXPANDED }
 
-// ── GPS DISTANCE HELPER ───────────────────────────────────────
+// Marker colors by charger status
+private const val COLOR_IDLE = 0xFF16C384.toInt()
+private const val COLOR_IN_USE = 0xFFF4941C.toInt()
+private const val COLOR_OFFLINE = 0xFF95989F.toInt()
+private const val COLOR_RESERVED = 0xFF3B82F6.toInt()
+
+// Small delay so parent callbacks/API work do not fire on every keystroke instantly.
+private const val SEARCH_DEBOUNCE_MS = 250L
+
+// Max number of visible suggestions in overlay.
+private const val MAX_SUGGESTIONS = 8
+
+// ──────────────────────────────────────────────────────────────
+// Distance helpers
+// ──────────────────────────────────────────────────────────────
 private fun haversineKm(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
     val r = 6371.0
     val dLat = Math.toRadians(lat2 - lat1)
@@ -83,31 +161,30 @@ private fun haversineKm(lat1: Double, lng1: Double, lat2: Double, lng2: Double):
 
 private fun formatDistance(km: Double): String = when {
     km < 1.0 -> "${(km * 1000).roundToInt()} m"
-    else      -> String.format(java.util.Locale.getDefault(), "%.1f km", km)
+    else -> String.format(java.util.Locale.getDefault(), "%.1f km", km)
 }
 
-// ── MARKER COLORS ────────────────────────────────────────────
-private const val COLOR_IDLE     = 0xFF16C384.toInt()
-private const val COLOR_IN_USE   = 0xFFF4941C.toInt()
-private const val COLOR_OFFLINE  = 0xFF95989F.toInt()
-private const val COLOR_RESERVED = 0xFF3B82F6.toInt()
-
-// ── BRANDED TEARDROP MARKER with ⚡ inside ────────────────────
-// Large, unique shape — stands out from all Google Maps POI icons
+// ──────────────────────────────────────────────────────────────
+// Custom marker for chargers
+// ──────────────────────────────────────────────────────────────
 private fun plugboxMarkerBitmap(fillColor: Int): BitmapDescriptor {
-    val W = 120; val H = 160  // tall teardrop shape
-    val bmp = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888)
+    val width = 120
+    val height = 160
+    val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
 
-    val cx = W / 2f
-    val r  = W / 2f - 6f     // circle radius
-    val tipY = H.toFloat() - 4f  // tip of teardrop at bottom
+    val cx = width / 2f
+    val r = width / 2f - 6f
+    val tipY = height.toFloat() - 4f
 
-    // ── DROP SHADOW ────────────────────────────────────────
     val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        this.color = 0x33000000.toInt()
-        maskFilter = android.graphics.BlurMaskFilter(10f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+        color = 0x33000000.toInt()
+        maskFilter = android.graphics.BlurMaskFilter(
+            10f,
+            android.graphics.BlurMaskFilter.Blur.NORMAL
+        )
     }
+
     val shadowPath = android.graphics.Path().apply {
         addCircle(cx + 2f, r + 8f, r, android.graphics.Path.Direction.CW)
         moveTo(cx - 8f + 2f, r + r * 0.6f + 8f)
@@ -117,7 +194,6 @@ private fun plugboxMarkerBitmap(fillColor: Int): BitmapDescriptor {
     }
     canvas.drawPath(shadowPath, shadowPaint)
 
-    // ── TEARDROP PATH ──────────────────────────────────────
     val path = android.graphics.Path().apply {
         addCircle(cx, r + 6f, r, android.graphics.Path.Direction.CW)
         moveTo(cx - r * 0.55f, r + r * 0.55f + 6f)
@@ -126,45 +202,39 @@ private fun plugboxMarkerBitmap(fillColor: Int): BitmapDescriptor {
         close()
     }
 
-    // Filled teardrop
-    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = fillColor }
+    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fillColor }
     canvas.drawPath(path, fillPaint)
 
-    // White border
     val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        this.color = android.graphics.Color.WHITE
+        color = android.graphics.Color.WHITE
         style = Paint.Style.STROKE
         strokeWidth = 5f
     }
     canvas.drawPath(path, borderPaint)
 
-    // ── WHITE CIRCLE INSIDE ────────────────────────────────
-    val innerR = r * 0.58f
     val innerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        this.color = android.graphics.Color.WHITE
-        alpha = 40  // subtle inner highlight
+        color = android.graphics.Color.WHITE
+        alpha = 40
     }
-    canvas.drawCircle(cx, r + 6f, innerR, innerPaint)
+    canvas.drawCircle(cx, r + 6f, r * 0.58f, innerPaint)
 
-    // ── LIGHTNING BOLT ⚡ ──────────────────────────────────
-    // Drawn as a polygon path centered in the circle
     val boltPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        this.color = android.graphics.Color.WHITE
+        color = android.graphics.Color.WHITE
         style = Paint.Style.FILL
     }
+
     val cy = r + 6f
-    val bw = r * 0.38f   // bolt width scale
-    val bh = r * 0.65f   // bolt height scale
+    val bw = r * 0.38f
+    val bh = r * 0.65f
     val boltPath = android.graphics.Path().apply {
-        // Top point → right mid → center notch → bottom point → left mid
-        moveTo(cx + bw * 0.1f, cy - bh)         // top
-        lineTo(cx + bw * 0.55f, cy - bh * 0.05f) // right upper
-        lineTo(cx + bw * 0.1f, cy + bh * 0.05f) // notch right
-        lineTo(cx + bw * 0.5f, cy + bh)          // bottom right
-        lineTo(cx - bw * 0.1f, cy + bh * 0.1f)  // bottom
-        lineTo(cx - bw * 0.45f, cy + bh * 0.1f) // left lower
-        lineTo(cx - bw * 0.05f, cy - bh * 0.05f)// notch left
-        lineTo(cx - bw * 0.5f, cy - bh * 0.05f) // left upper
+        moveTo(cx + bw * 0.1f, cy - bh)
+        lineTo(cx + bw * 0.55f, cy - bh * 0.05f)
+        lineTo(cx + bw * 0.1f, cy + bh * 0.05f)
+        lineTo(cx + bw * 0.5f, cy + bh)
+        lineTo(cx - bw * 0.1f, cy + bh * 0.1f)
+        lineTo(cx - bw * 0.45f, cy + bh * 0.1f)
+        lineTo(cx - bw * 0.05f, cy - bh * 0.05f)
+        lineTo(cx - bw * 0.5f, cy - bh * 0.05f)
         close()
     }
     canvas.drawPath(boltPath, boltPaint)
@@ -172,46 +242,53 @@ private fun plugboxMarkerBitmap(fillColor: Int): BitmapDescriptor {
     return BitmapDescriptorFactory.fromBitmap(bmp)
 }
 
-// ── USER LOCATION MARKER (large glowing blue dot) ─────────────
+// ──────────────────────────────────────────────────────────────
+// Custom user-location marker
+// ──────────────────────────────────────────────────────────────
 private fun userMarkerBitmap(): BitmapDescriptor {
-    val size = 160  // large and visible
+    val size = 160
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
     val cx = size / 2f
 
-    // Big outer glow
     val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        shader = RadialGradient(cx, cx, cx,
-            intArrayOf(0x553B82F6.toInt(), 0x113B82F6.toInt(), android.graphics.Color.TRANSPARENT),
-            floatArrayOf(0.3f, 0.6f, 1f), Shader.TileMode.CLAMP)
+        shader = RadialGradient(
+            cx,
+            cx,
+            cx,
+            intArrayOf(
+                0x553B82F6.toInt(),
+                0x113B82F6.toInt(),
+                android.graphics.Color.TRANSPARENT
+            ),
+            floatArrayOf(0.3f, 0.6f, 1f),
+            Shader.TileMode.CLAMP
+        )
     }
     canvas.drawCircle(cx, cx, cx, glowPaint)
 
-    // White ring
     val whitePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        this.color = android.graphics.Color.WHITE
+        color = android.graphics.Color.WHITE
         setShadowLayer(8f, 0f, 2f, 0x44000000.toInt())
     }
     canvas.drawCircle(cx, cx, 36f, whitePaint)
 
-    // Blue dot
     val bluePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        this.color = 0xFF3B82F6.toInt()
+        color = 0xFF3B82F6.toInt()
     }
     canvas.drawCircle(cx, cx, 26f, bluePaint)
 
-    // Inner white highlight
-    val hlPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        this.color = 0x88FFFFFF.toInt()
+    val highlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x88FFFFFF.toInt()
     }
-    canvas.drawCircle(cx - 7f, cx - 7f, 8f, hlPaint)
+    canvas.drawCircle(cx - 7f, cx - 7f, 8f, highlightPaint)
 
     return BitmapDescriptorFactory.fromBitmap(bmp)
 }
 
-// ═══════════════════════════════════════════════════════════════
-// HomeMapScreen
-// ═══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
+// Main screen
+// ──────────────────────────────────────────────────────────────
 @OptIn(ExperimentalPermissionsApi::class)
 @SuppressLint("MissingPermission")
 @Composable
@@ -225,12 +302,18 @@ fun HomeMapScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var userLocation by remember { mutableStateOf<Location?>(null) }
-    var sheet        by remember { mutableStateOf(HsSheet.HALF) }
-    var dragOff      by remember { mutableFloatStateOf(0f) }
-    var timedOut     by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
 
-    // ── LOCATION PERMISSION ───────────────────────────────────
+    // Persist search query across recompositions / simple config changes.
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var isSearchFocused by remember { mutableStateOf(false) }
+
+    var userLocation by remember { mutableStateOf<Location?>(null) }
+    var sheet by remember { mutableStateOf(HsSheet.HALF) }
+    var dragOff by remember { mutableFloatStateOf(0f) }
+    var timedOut by remember { mutableStateOf(false) }
+
     val locationPermissions = rememberMultiplePermissionsState(
         listOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -238,174 +321,211 @@ fun HomeMapScreen(
         )
     )
 
+    // Request permissions once on first load.
     LaunchedEffect(Unit) {
         if (!locationPermissions.allPermissionsGranted) {
             locationPermissions.launchMultiplePermissionRequest()
         }
     }
 
-    // ── GET GPS LOCATION ──────────────────────────────────────
+    // Fetch current device location.
+    // Retry a few times because location can often be null on first call.
     LaunchedEffect(locationPermissions.allPermissionsGranted) {
-        if (locationPermissions.allPermissionsGranted) {
-            val fusedClient = LocationServices.getFusedLocationProviderClient(context)
-            // Keep trying every 3s until we get a location
-            repeat(10) {
-                if (userLocation != null) return@repeat
-                try {
-                    val cts = com.google.android.gms.tasks.CancellationTokenSource()
-                    val loc = fusedClient.getCurrentLocation(
-                        com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
-                        cts.token
-                    ).await()
-                    if (loc != null) { userLocation = loc; return@repeat }
-                } catch (_: Exception) { }
-                delay(3000L)
+        if (!locationPermissions.allPermissionsGranted) return@LaunchedEffect
+
+        val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+        repeat(10) {
+            if (userLocation != null) return@repeat
+            try {
+                val cts = com.google.android.gms.tasks.CancellationTokenSource()
+                val loc = fusedClient.getCurrentLocation(
+                    com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
+                    cts.token
+                ).await()
+
+                if (loc != null) {
+                    userLocation = loc
+                    return@repeat
+                }
+            } catch (_: Exception) {
+                // Intentionally ignored.
+                // If location fails once, retry without crashing the UI.
+            }
+            delay(3000L)
+        }
+    }
+
+    // Sort chargers by nearest distance when location is available.
+    val sortedChargers by remember(chargers, userLocation) {
+        derivedStateOf {
+            userLocation?.let { loc ->
+                chargers.map { charger ->
+                    charger.copy(
+                        distanceKm = haversineKm(
+                            loc.latitude,
+                            loc.longitude,
+                            charger.lat,
+                            charger.lng
+                        )
+                    )
+                }.sortedBy { it.distanceKm }
+            } ?: chargers
+        }
+    }
+
+    // Fast local suggestions for instant UX.
+    // This is intentionally local and immediate, even before any parent/API search finishes.
+    val searchSuggestions by remember(searchQuery, sortedChargers) {
+        derivedStateOf {
+            val q = searchQuery.trim()
+            if (q.isBlank()) {
+                emptyList()
+            } else {
+                sortedChargers.filter { charger ->
+                    charger.name.contains(q, ignoreCase = true) ||
+                            charger.address.contains(q, ignoreCase = true)
+                }.take(MAX_SUGGESTIONS)
             }
         }
     }
 
-    // ── SORT CHARGERS BY DISTANCE ─────────────────────────────
-    val sortedChargers = remember(chargers, userLocation) {
-        if (userLocation != null) {
-            chargers.map { c ->
-                val dist = haversineKm(userLocation!!.latitude, userLocation!!.longitude, c.lat, c.lng)
-                c.copy(distanceKm = dist)
-            }.sortedBy { it.distanceKm }
-        } else chargers
+    val showSearchSuggestions by remember(isSearchFocused, searchQuery) {
+        derivedStateOf { isSearchFocused && searchQuery.isNotBlank() }
     }
 
-    // ── TIMEOUT for loading ───────────────────────────────────
+    // Debounce parent search callback so heavy work / API calls do not fire on every key press.
+    LaunchedEffect(searchQuery) {
+        delay(SEARCH_DEBOUNCE_MS)
+        onSearchChanged(searchQuery)
+    }
+
+    // Simple timeout state for empty charger response.
     LaunchedEffect(chargers) {
         if (chargers.isEmpty()) {
             timedOut = false
             delay(8000L)
             if (chargers.isEmpty()) timedOut = true
-        } else timedOut = false
+        } else {
+            timedOut = false
+        }
     }
 
     val sheetFrac by animateFloatAsState(
         targetValue = when (sheet) {
-            HsSheet.FULL_MAP  -> 0f
+            HsSheet.FULL_MAP -> 0f
             HsSheet.COLLAPSED -> 0.13f
-            HsSheet.HALF      -> 0.50f
-            HsSheet.EXPANDED  -> 0.82f
+            HsSheet.HALF -> 0.50f
+            HsSheet.EXPANDED -> 0.82f
         },
         animationSpec = spring(dampingRatio = 0.75f, stiffness = 300f),
         label = "sheetFrac"
     )
 
-    // ── MAP CAMERA ────────────────────────────────────────────
-    val mapCenter = remember(userLocation, sortedChargers) {
-        userLocation?.let { LatLng(it.latitude, it.longitude) }
-            ?: sortedChargers.firstOrNull()?.let { LatLng(it.lat, it.lng) }
-            ?: LatLng(21.1458, 79.0882)
-    }
     val cam = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(mapCenter, 12f)
+        position = CameraPosition.fromLatLngZoom(LatLng(21.1458, 79.0882), 13f)
     }
 
-    // ═════════════════════════════════════════════════════════
-    // UI
-    // ═════════════════════════════════════════════════════════
-    // Bitmaps built inside GoogleMap lambda (after Maps SDK is ready)
-
-    // ── LOCATION SETTINGS: show "Turn on GPS" dialog if off ──
+    // Ask user to enable GPS if needed.
     val settingsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
     ) { }
+
     LaunchedEffect(locationPermissions.allPermissionsGranted) {
         if (!locationPermissions.allPermissionsGranted) return@LaunchedEffect
         try {
-            val lr = LocationRequest.Builder(
-                com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY, 5000L
+            val request = LocationRequest.Builder(
+                com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
+                5000L
             ).build()
-            val sr = LocationSettingsRequest.Builder().addLocationRequest(lr).setAlwaysShow(true).build()
-            LocationServices.getSettingsClient(context).checkLocationSettings(sr)
+
+            val settingsRequest = LocationSettingsRequest.Builder()
+                .addLocationRequest(request)
+                .setAlwaysShow(true)
+                .build()
+
+            LocationServices.getSettingsClient(context)
+                .checkLocationSettings(settingsRequest)
                 .addOnFailureListener { ex ->
                     if (ex is com.google.android.gms.common.api.ResolvableApiException) {
                         try {
                             settingsLauncher.launch(
                                 IntentSenderRequest.Builder(ex.resolution.intentSender).build()
                             )
-                        } catch (_: IntentSender.SendIntentException) {}
+                        } catch (_: IntentSender.SendIntentException) {
+                            // Ignore if dialog launch fails.
+                        }
                     }
                 }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+            // Ignore settings errors to avoid UI crash.
+        }
     }
 
-    // ── AUTO-ANIMATE CAMERA TO USER LOCATION ──────────────────
+    // Initial camera animation to user location when available.
     LaunchedEffect(userLocation) {
         userLocation?.let { loc ->
-            cam.animate(
-                com.google.android.gms.maps.CameraUpdateFactory.newLatLngZoom(
-                    LatLng(loc.latitude, loc.longitude), 14f
-                ), durationMs = 900
+            safeAnimateCamera(
+                scope = scope,
+                cameraAction = {
+                    cam.animate(
+                        CameraUpdateFactory.newLatLngZoom(
+                            LatLng(loc.latitude, loc.longitude),
+                            14f
+                        ),
+                        durationMs = 900
+                    )
+                }
             )
         }
     }
 
+    val nearestIdle = remember(sortedChargers) {
+        sortedChargers.firstOrNull { it.status == ChargerStatus.IDLE }
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+
+    // Map content padding is what keeps the "current location" visually above the bottom sheet.
+    val mapBottomPadding = (sheetFrac * 900 + 24).dp
+
     Box(modifier = modifier.fillMaxSize()) {
-
-        // ── MAP ───────────────────────────────────────────────
-        // Nearest idle charger for route line
-        val nearestIdle = sortedChargers.firstOrNull { it.status == ChargerStatus.IDLE }
-
-        // Pulsing scale animation for idle markers
-        val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-        val pulseScale by infiniteTransition.animateFloat(
-            initialValue = 0.92f,
-            targetValue = 1.08f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(900, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "pulseScale"
-        )
-        // Pulsing for user location ripple
-        val rippleAlpha by infiniteTransition.animateFloat(
-            initialValue = 0.6f,
-            targetValue = 0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(1200, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "ripple"
-        )
-        val rippleRadius by infiniteTransition.animateFloat(
-            initialValue = 24f,
-            targetValue = 64f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(1200, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "rippleRadius"
-        )
 
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cam,
+            contentPadding = PaddingValues(
+                top = 96.dp,
+                bottom = mapBottomPadding
+            ),
             uiSettings = MapUiSettings(
                 zoomControlsEnabled = false,
                 myLocationButtonEnabled = false
             ),
             properties = MapProperties(isMyLocationEnabled = false)
         ) {
-            // ── Build bitmaps HERE — Maps SDK guaranteed initialized inside this lambda ──
-            val idleIcon     = remember { plugboxMarkerBitmap(COLOR_IDLE) }
-            val inUseIcon    = remember { plugboxMarkerBitmap(COLOR_IN_USE) }
-            val offlineIcon  = remember { plugboxMarkerBitmap(COLOR_OFFLINE) }
+            val idleIcon = remember { plugboxMarkerBitmap(COLOR_IDLE) }
+            val inUseIcon = remember { plugboxMarkerBitmap(COLOR_IN_USE) }
+            val offlineIcon = remember { plugboxMarkerBitmap(COLOR_OFFLINE) }
             val reservedIcon = remember { plugboxMarkerBitmap(COLOR_RESERVED) }
-            val userIcon     = remember { userMarkerBitmap() }
+            val userIcon = remember { userMarkerBitmap() }
 
-            // Dashed route line: user → nearest idle charger
-            val loc = userLocation  // local val for smart cast
+            val loc = userLocation
             if (loc != null && nearestIdle != null) {
                 Polyline(
                     points = listOf(
                         LatLng(loc.latitude, loc.longitude),
                         LatLng(nearestIdle.lat, nearestIdle.lng)
                     ),
-                    color = Color(0xFF3B82F6),
+                    color = MockBlue,
                     width = 8f,
                     pattern = listOf(
                         com.google.android.gms.maps.model.Dash(30f),
@@ -414,47 +534,57 @@ fun HomeMapScreen(
                 )
             }
 
-            // Charger markers — branded teardrop with ⚡
-            // IDLE markers pulse; others are static
-            sortedChargers.forEach { c ->
-                val icon = when (c.status) {
-                    ChargerStatus.IDLE     -> idleIcon
-                    ChargerStatus.IN_USE   -> inUseIcon
+            sortedChargers.forEach { charger ->
+                val icon = when (charger.status) {
+                    ChargerStatus.IDLE -> idleIcon
+                    ChargerStatus.IN_USE -> inUseIcon
                     ChargerStatus.RESERVED -> reservedIcon
-                    ChargerStatus.OFFLINE  -> offlineIcon
+                    ChargerStatus.OFFLINE -> offlineIcon
                 }
-                val ms = remember(c.id) { MarkerState(LatLng(c.lat, c.lng)) }
-                // Use alpha pulse for IDLE to create attention effect
-                val markerAlpha = if (c.status == ChargerStatus.IDLE) pulseScale else 1f
+
+                val markerState = remember(charger.id) {
+                    MarkerState(LatLng(charger.lat, charger.lng))
+                }
+
                 Marker(
-                    state = ms,
-                    title = c.name,
-                    snippet = c.status.name,
+                    state = markerState,
+                    title = charger.name,
+                    snippet = charger.status.name,
                     icon = icon,
-                    alpha = markerAlpha,
-                    zIndex = if (c.status == ChargerStatus.IDLE) 2f else 1f,
-                    onClick = { onSelect(c); false }
+                    alpha = if (charger.status == ChargerStatus.IDLE) pulseScale else 1f,
+                    zIndex = if (charger.status == ChargerStatus.IDLE) 2f else 1f,
+                    onClick = {
+                        onSelect(charger)
+                        false
+                    }
                 )
             }
 
-            // User location — big ripple + dot
             if (loc != null) {
-                val ums = remember(loc.latitude, loc.longitude) {
+                val userMarkerState = remember(loc.latitude, loc.longitude) {
                     MarkerState(LatLng(loc.latitude, loc.longitude))
                 }
+
                 Marker(
-                    state = ums,
+                    state = userMarkerState,
                     title = "You are here",
                     icon = userIcon,
-                    anchor = androidx.compose.ui.geometry.Offset(0.5f, 0.5f),
+                    anchor = Offset(0.5f, 0.5f),
                     zIndex = 5f
                 )
             }
         }
 
-        // ── SEARCH BAR ────────────────────────────────────────
         HsSearchBar(
+            query = searchQuery,
+            onQueryChange = { searchQuery = it },
+            onFocusChanged = { isSearchFocused = it },
             onFilterClick = onFilterClick,
+            onClearClick = {
+                searchQuery = ""
+                isSearchFocused = false
+                focusManager.clearFocus()
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
@@ -462,8 +592,65 @@ fun HomeMapScreen(
                 .align(Alignment.TopCenter)
         )
 
-        // ── DRAGGABLE BOTTOM SHEET ────────────────────────────
-        if (sheetFrac > 0f) {
+        // Search overlay sits above the map and above the bottom sheet.
+        // This gives the "product app" autocomplete behavior the user expects.
+        if (showSearchSuggestions) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 86.dp)
+                    .align(Alignment.TopCenter),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
+            ) {
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 320.dp),
+                    contentPadding = PaddingValues(vertical = 8.dp)
+                ) {
+                    if (searchSuggestions.isEmpty()) {
+                        item {
+                            Text(
+                                text = "No matching charging points",
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                                color = MockGray,
+                                fontSize = 14.sp
+                            )
+                        }
+                    } else {
+                        items(searchSuggestions, key = { it.id }) { charger ->
+                            SearchSuggestionRow(
+                                charger = charger,
+                                onClick = {
+                                    onSelect(charger)
+                                    searchQuery = charger.name
+                                    isSearchFocused = false
+                                    focusManager.clearFocus()
+
+                                    safeAnimateCamera(
+                                        scope = scope,
+                                        cameraAction = {
+                                            cam.animate(
+                                                CameraUpdateFactory.newLatLngZoom(
+                                                    LatLng(charger.lat, charger.lng),
+                                                    15f
+                                                ),
+                                                durationMs = 700
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Hide the bottom sheet during suggestion mode.
+        // This avoids keyboard + sheet + dropdown competing for the same space.
+        if (!showSearchSuggestions && sheetFrac > 0f) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -483,37 +670,55 @@ fun HomeMapScreen(
                     }
             ) {
                 HsDragPill()
+
                 when {
                     sortedChargers.isNotEmpty() -> HsChargerList(
                         chargers = sortedChargers,
-                        userLocation = userLocation,
                         selected = selected,
                         onSelect = onSelect,
                         onBookNow = onBookNow
                     )
-                    timedOut -> HsErrorView(onRetry = {
-                        timedOut = false
-                        onSearchChanged("")
-                    })
+
+                    timedOut -> HsErrorView(
+                        onRetry = {
+                            timedOut = false
+                            searchQuery = ""
+                            onSearchChanged("")
+                        }
+                    )
+
                     else -> HsLoadingView()
                 }
             }
         }
 
-        // ── MY LOCATION FAB ───────────────────────────────────
-        if (sheet != HsSheet.FULL_MAP && locationPermissions.allPermissionsGranted) {
+        if (!showSearchSuggestions &&
+            sheet != HsSheet.FULL_MAP &&
+            locationPermissions.allPermissionsGranted
+        ) {
             FloatingActionButton(
                 onClick = {
-                    userLocation?.let {
-                        cam.move(
-                            com.google.android.gms.maps.CameraUpdateFactory
-                                .newLatLngZoom(LatLng(it.latitude, it.longitude), 15f)
+                    userLocation?.let { loc ->
+                        safeAnimateCamera(
+                            scope = scope,
+                            cameraAction = {
+                                cam.animate(
+                                    CameraUpdateFactory.newLatLngZoom(
+                                        LatLng(loc.latitude, loc.longitude),
+                                        15f
+                                    ),
+                                    durationMs = 700
+                                )
+                            }
                         )
                     }
                 },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = (sheetFrac * 900 + 16).dp.coerceAtLeast(80.dp)),
+                    .padding(
+                        end = 16.dp,
+                        bottom = (sheetFrac * 900 + 16).dp.coerceAtLeast(80.dp)
+                    ),
                 containerColor = Color.White,
                 contentColor = MockBlue,
                 elevation = FloatingActionButtonDefaults.elevation(4.dp)
@@ -526,8 +731,7 @@ fun HomeMapScreen(
             }
         }
 
-        // ── SHOW LIST FAB when map is full screen ─────────────
-        if (sheet == HsSheet.FULL_MAP) {
+        if (!showSearchSuggestions && sheet == HsSheet.FULL_MAP) {
             ExtendedFloatingActionButton(
                 onClick = { sheet = HsSheet.HALF },
                 modifier = Modifier
@@ -545,27 +749,87 @@ fun HomeMapScreen(
     }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// CHARGER LIST
-// ═══════════════════════════════════════════════════════════════
+// ──────────────────────────────────────────────────────────────
+// Safe camera launcher
+// Prevents direct suspend-call misuse from click handlers.
+// Also swallows animation cancellation without crashing UI.
+// ──────────────────────────────────────────────────────────────
+private fun safeAnimateCamera(
+    scope: kotlinx.coroutines.CoroutineScope,
+    cameraAction: suspend () -> Unit
+) {
+    scope.launch {
+        try {
+            cameraAction()
+        } catch (_: Exception) {
+            // Camera animation may be cancelled if user moves the map.
+            // That should not crash the app.
+        }
+    }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Search suggestion row
+// ──────────────────────────────────────────────────────────────
+@Composable
+private fun SearchSuggestionRow(
+    charger: UiCharger,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Outlined.LocationOn,
+                contentDescription = null,
+                tint = MockBlue,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = charger.name,
+                color = MockTextMain,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = charger.address,
+            color = MockGray,
+            fontSize = 13.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 26.dp)
+        )
+    }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Bottom-sheet charger list
+// ──────────────────────────────────────────────────────────────
 @Composable
 private fun HsChargerList(
     chargers: List<UiCharger>,
-    userLocation: Location?,
     selected: UiCharger?,
     onSelect: (UiCharger) -> Unit,
     onBookNow: (UiCharger) -> Unit
 ) {
-    val idle = chargers.filter { it.status == ChargerStatus.IDLE }
-    val rest = chargers.filter { it.status != ChargerStatus.IDLE }
+    val idle = remember(chargers) { chargers.filter { it.status == ChargerStatus.IDLE } }
+    val rest = remember(chargers) { chargers.filter { it.status != ChargerStatus.IDLE } }
 
     LazyColumn(
-        contentPadding = PaddingValues(
-            start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp
-        ),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // ── NEAREST IDLE CARD ──────────────────────────────
         idle.firstOrNull()?.let { nearest ->
             item {
                 HsNearestCard(
@@ -574,17 +838,19 @@ private fun HsChargerList(
                     onBookNow = { onBookNow(nearest) }
                 )
             }
-            // Other idle chargers
-            items(idle.drop(1)) { c ->
+
+            items(idle.drop(1), key = { it.id }) { charger ->
                 HsChargerRow(
-                    charger = c,
-                    isSelected = selected?.id == c.id,
-                    onClick = { onSelect(c); onBookNow(c) }
+                    charger = charger,
+                    isSelected = selected?.id == charger.id,
+                    onClick = {
+                        onSelect(charger)
+                        onBookNow(charger)
+                    }
                 )
             }
         }
 
-        // "No chargers available" only if ALL are non-idle
         if (idle.isEmpty() && rest.isNotEmpty()) {
             item {
                 Text(
@@ -596,14 +862,19 @@ private fun HsChargerList(
             }
         }
 
-        // Non-idle chargers
-        items(rest) { c ->
-            HsChargerRow(charger = c, isSelected = false, onClick = null)
+        items(rest, key = { it.id }) { charger ->
+            HsChargerRow(
+                charger = charger,
+                isSelected = false,
+                onClick = null
+            )
         }
     }
 }
 
-// ── NEAREST AVAILABLE CARD (green, matches mockup) ────────────
+// ──────────────────────────────────────────────────────────────
+// Highlighted nearest available charger card
+// ──────────────────────────────────────────────────────────────
 @Composable
 private fun HsNearestCard(
     charger: UiCharger,
@@ -620,8 +891,6 @@ private fun HsNearestCard(
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-
-            // "Nearest available now" label
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Spacer(modifier = Modifier.width(1.dp))
                 Text(
@@ -634,9 +903,7 @@ private fun HsNearestCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Charger name
             Row(verticalAlignment = Alignment.CenterVertically) {
-
                 Icon(
                     imageVector = Icons.Default.Power,
                     contentDescription = null,
@@ -658,7 +925,6 @@ private fun HsNearestCard(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Distance row
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Outlined.LocationOn,
@@ -668,9 +934,7 @@ private fun HsNearestCard(
                 )
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(
-                    text = if (charger.distanceKm > 0.01)
-                        formatDistance(charger.distanceKm)
-                    else "Locating...",
+                    text = if (charger.distanceKm > 0.01) formatDistance(charger.distanceKm) else "Locating...",
                     fontSize = 13.sp,
                     color = MockGray
                 )
@@ -678,13 +942,11 @@ private fun HsNearestCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Status + price row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // IDLE pill
                 Surface(
                     color = MockGreen.copy(alpha = 0.12f),
                     shape = RoundedCornerShape(999.dp)
@@ -694,22 +956,33 @@ private fun HsNearestCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
+                        val inf = rememberInfiniteTransition(label = "nearestDot")
+                        val alpha by inf.animateFloat(
+                            initialValue = 0.25f,
+                            targetValue = 1f,
+                            animationSpec = infiniteRepeatable(
+                                tween(700, easing = FastOutSlowInEasing),
+                                RepeatMode.Reverse
+                            ),
+                            label = "nearestDotAlpha"
+                        )
+
                         Box(
                             modifier = Modifier
                                 .size(7.dp)
                                 .clip(CircleShape)
-                                .background(MockGreen)
+                                .background(MockGreen.copy(alpha = alpha))
                         )
+
                         Text(
-                            text = "IDLE",
+                            text = "Available Now",
                             color = MockGreen,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp
+                            fontSize = 12.sp
                         )
                     }
                 }
 
-                // Price
                 Text(
                     text = charger.priceHint,
                     color = MockBlue,
@@ -720,7 +993,6 @@ private fun HsNearestCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Book now button
             Button(
                 onClick = onBookNow,
                 modifier = Modifier
@@ -740,29 +1012,32 @@ private fun HsNearestCard(
     }
 }
 
-// ── CHARGER ROW (non-nearest) ──────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// Standard charger row
+// ──────────────────────────────────────────────────────────────
 @Composable
 private fun HsChargerRow(
     charger: UiCharger,
     isSelected: Boolean,
     onClick: (() -> Unit)?
 ) {
+    val isIdle = charger.status == ChargerStatus.IDLE
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MockGreenBg else Color.White
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         border = androidx.compose.foundation.BorderStroke(
-            1.dp, Color(0xFFE2E8F0)
+            width = if (isSelected) 1.4.dp else 1.dp,
+            color = if (isSelected) MockBlue.copy(alpha = 0.30f) else Color(0xFFF1F5F9)
         ),
         onClick = { onClick?.invoke() }
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(horizontal = 16.dp, vertical = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -771,42 +1046,62 @@ private fun HsChargerRow(
                     text = charger.name,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 15.sp,
-                    color = MockTextMain,
+                    color = if (isIdle) MockTextMain else MockTextMain.copy(alpha = 0.45f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+
+                Spacer(modifier = Modifier.height(5.dp))
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Outlined.LocationOn,
                         contentDescription = null,
-                        tint = MockGray,
+                        tint = MockGray.copy(alpha = if (isIdle) 0.7f else 0.35f),
                         modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(3.dp))
                     Text(
-                        text = if (charger.distanceKm > 0)
-                            formatDistance(charger.distanceKm)
-                        else charger.address,
+                        text = if (charger.distanceKm > 0) formatDistance(charger.distanceKm) else charger.address,
                         fontSize = 12.sp,
-                        color = MockGray
+                        color = MockGray.copy(alpha = if (isIdle) 0.7f else 0.35f)
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.width(12.dp))
             HsStatusBadge(status = charger.status)
         }
     }
 }
 
-// ── STATUS BADGE ──────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// Availability badge
+// ──────────────────────────────────────────────────────────────
 @Composable
 private fun HsStatusBadge(status: ChargerStatus) {
     val (label, color) = when (status) {
-        ChargerStatus.IDLE     -> "Idle"     to MockGreen
-        ChargerStatus.IN_USE   -> "In use"   to MockOrange
+        ChargerStatus.IDLE -> "Available" to MockGreen
+        ChargerStatus.IN_USE -> "In use" to MockOrange
         ChargerStatus.RESERVED -> "Reserved" to MockBlue
-        ChargerStatus.OFFLINE  -> "Offline"  to MockGray
+        ChargerStatus.OFFLINE -> "Offline" to MockGray
     }
+
+    val dotAlpha = if (status == ChargerStatus.IDLE) {
+        val inf = rememberInfiniteTransition(label = "idleDot")
+        inf.animateFloat(
+            initialValue = 0.25f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                tween(700, easing = FastOutSlowInEasing),
+                RepeatMode.Reverse
+            ),
+            label = "dotAlpha"
+        ).value
+    } else {
+        1f
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -821,16 +1116,20 @@ private fun HsStatusBadge(status: ChargerStatus) {
             modifier = Modifier
                 .size(8.dp)
                 .clip(CircleShape)
-                .background(color)
+                .background(color.copy(alpha = dotAlpha))
         )
     }
 }
 
-// ── LOADING ───────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// Loading state
+// ──────────────────────────────────────────────────────────────
 @Composable
 private fun HsLoadingView() {
     Box(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -838,16 +1137,24 @@ private fun HsLoadingView() {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             CircularProgressIndicator(color = MockGreen)
-            Text(text = "Finding chargers near you...", color = MockGray, fontSize = 14.sp)
+            Text(
+                text = "Finding chargers near you...",
+                color = MockGray,
+                fontSize = 14.sp
+            )
         }
     }
 }
 
-// ── ERROR / RETRY ─────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// Error state
+// ──────────────────────────────────────────────────────────────
 @Composable
 private fun HsErrorView(onRetry: () -> Unit) {
     Box(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -883,7 +1190,9 @@ private fun HsErrorView(onRetry: () -> Unit) {
     }
 }
 
-// ── DRAG PILL ─────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// Bottom-sheet drag handle
+// ──────────────────────────────────────────────────────────────
 @Composable
 private fun HsDragPill() {
     Box(
@@ -902,22 +1211,47 @@ private fun HsDragPill() {
     }
 }
 
-// ── SEARCH BAR ────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// Search bar
+// Notes:
+// - local UI focus state is used only for border styling
+// - actual query state is hoisted to parent
+// - clear button resets text and focus
+// ──────────────────────────────────────────────────────────────
 @Composable
 private fun HsSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onFocusChanged: (Boolean) -> Unit,
     onFilterClick: () -> Unit,
+    onClearClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var isFocused by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(18.dp),
         color = Color.White,
-        shadowElevation = 8.dp
+        shadowElevation = 10.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 13.dp),
+                .height(56.dp)
+                .then(
+                    if (isFocused) {
+                        Modifier.border(
+                            width = 1.dp,
+                            color = MockBlue.copy(alpha = 0.28f),
+                            shape = RoundedCornerShape(18.dp)
+                        )
+                    } else {
+                        Modifier
+                    }
+                )
+                .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -926,38 +1260,96 @@ private fun HsSearchBar(
                 tint = MockGray,
                 modifier = Modifier.size(20.dp)
             )
+
             Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                text = "Search charger / area",
-                color = MockGray,
-                fontSize = 15.sp,
-                modifier = Modifier.weight(1f)
+
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = 2.dp)
+                    .onFocusChanged {
+                        isFocused = it.isFocused
+                        onFocusChanged(it.isFocused)
+                    },
+                singleLine = true,
+                textStyle = TextStyle(
+                    color = MockTextMain,
+                    fontSize = 15.sp
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        focusManager.clearFocus()
+                    }
+                ),
+                decorationBox = { inner ->
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (query.isEmpty()) {
+                            Text(
+                                text = "Search charger / area",
+                                color = MockGray,
+                                fontSize = 15.sp
+                            )
+                        }
+                        inner()
+                    }
+                }
             )
+
+            if (query.isNotEmpty()) {
+                IconButton(
+                    onClick = {
+                        onClearClick()
+                        focusManager.clearFocus()
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Clear",
+                        tint = MockGray,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
             IconButton(
                 onClick = onFilterClick,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(36.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Tune,
                     contentDescription = "Filter",
-                    tint = MockTextMain
+                    tint = MockTextMain,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
     }
 }
 
-// ── SHEET STATE RESOLVER ──────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// Bottom-sheet snap logic
+// ──────────────────────────────────────────────────────────────
 private fun hsResolveSheet(current: HsSheet, drag: Float): HsSheet = when {
     drag < -80 -> when (current) {
         HsSheet.FULL_MAP, HsSheet.COLLAPSED -> HsSheet.HALF
-        HsSheet.HALF                        -> HsSheet.EXPANDED
-        HsSheet.EXPANDED                    -> HsSheet.EXPANDED
+        HsSheet.HALF -> HsSheet.EXPANDED
+        HsSheet.EXPANDED -> HsSheet.EXPANDED
     }
+
     drag > 80 -> when (current) {
-        HsSheet.EXPANDED                    -> HsSheet.HALF
-        HsSheet.HALF                        -> HsSheet.COLLAPSED
+        HsSheet.EXPANDED -> HsSheet.HALF
+        HsSheet.HALF -> HsSheet.COLLAPSED
         HsSheet.COLLAPSED, HsSheet.FULL_MAP -> HsSheet.FULL_MAP
     }
+
     else -> current
 }
