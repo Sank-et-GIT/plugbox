@@ -78,40 +78,55 @@ private val StActiveGradient = Brush.linearGradient(
 // SECTION 2 — Data models + dummy data
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Active session — shown in the live card
+// Active BOOKING — booking confirmed, timer running, user hasn't arrived yet
+// This is the critical "app closed and reopened" state
+// Phase 2: ApiClient.api.getActiveBooking(userId)
+data class StActiveBooking(
+    val chargerName:    String,
+    val packageName:    String,
+    val packageInr:     Int,
+    val secondsLeft:    Int     // remaining grace period in seconds
+)
+
+// Active SESSION — charging in progress
 // Phase 2: ApiClient.api.getActiveSession(userId)
 data class StActiveSession(
     val chargerName: String,
     val usedKwh:     Double,
     val usedInr:     Int,
     val etaMinutes:  Int,
-    val progress:    Float   // 0f–1f
+    val progress:    Float
 )
 
 // Past session — shown in the history list
 data class StSession(
     val id:          String,
     val chargerName: String,
-    val dateGroup:   String,  // "Today" / "Yesterday" / "Earlier"
-    val dateLabel:   String,  // human-readable full date+time
+    val dateGroup:   String,
+    val dateLabel:   String,
     val durationMin: Int,
     val usedKwh:     Double,
     val usedInr:     Int,
-    val refundInr:   Int      // 0 if no refund
+    val refundInr:   Int
 )
 
-// Phase 1: null = no active session right now
-// Phase 2: replace with real API call
-private val dummyActiveSession: StActiveSession? = StActiveSession(
-    chargerName = "PlugBox - Nandanvan, D-mart",
-    usedKwh     = 0.42,
-    usedInr     = 17,
-    etaMinutes  = 8,
-    progress    = 0.42f
+// ── Dummy data ────────────────────────────────────────────────────────────────
+// Phase 1: set dummyActiveBooking = null and dummyActiveSession = null
+// to test different states. Only one should be non-null at a time.
+
+// Simulates: user booked, closed app, reopened — booking still active
+private val dummyActiveBooking: StActiveBooking? = StActiveBooking(
+    chargerName  = "PlugBox - Nandanvan, D-mart",
+    packageName  = "Standard",
+    packageInr   = 40,
+    secondsLeft  = 487   // ~8 minutes left when screen opens
 )
 
-// Phase 1: dummy history
-// Phase 2: ApiClient.api.getSessions(userId)
+// Active session — set to null when testing booking state above
+// Phase 2: only one of these will be non-null at any time
+private val dummyActiveSession: StActiveSession? = null
+
+// Past sessions
 private val dummySessions = listOf(
     StSession("s1", "PlugBox - Medical Chowk, V.R Mall",
         "Yesterday", "Yesterday, 6:30 PM", 45, 1.0, 40, 0),
@@ -125,12 +140,9 @@ private val dummySessions = listOf(
         "Earlier",   "Oct 20, 11:30 AM",  18, 0.4, 16, 4),
 )
 
-// Lifetime stats derived from dummy sessions
-// Phase 2: come from API summary endpoint
-private val lifetimeKwh   = dummySessions.sumOf { it.usedKwh }
-private val lifetimeInr   = dummySessions.sumOf { it.usedInr }
-private val lifetimeCo2g  = (lifetimeKwh * 120).toInt()  // ~120g CO₂ saved per kWh vs petrol
-private val lifetimeKmAdded = (lifetimeKwh * 6).toInt()  // ~6 km per kWh for 2-wheelers
+private val lifetimeKwh  = dummySessions.sumOf { it.usedKwh }
+private val lifetimeInr  = dummySessions.sumOf { it.usedInr }
+private val lifetimeCo2g = (lifetimeKwh * 120).toInt()
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION 3 — Main composable
@@ -138,13 +150,56 @@ private val lifetimeKmAdded = (lifetimeKwh * 6).toInt()  // ~6 km per kWh for 2-
 
 @Composable
 fun StatusScreen(
-    onViewActiveSession: () -> Unit = {},  // navigates to SessionScreen
+    onViewActiveSession: () -> Unit = {},  // → SessionScreen (charging)
+    onIveArrived:        () -> Unit = {},  // → SessionScreen (from booking card)
+    onCancelBooking:     () -> Unit = {},  // → HomeScreen
     modifier:            Modifier   = Modifier
 ) {
-    // Track which session row is expanded
     var expandedId by remember { mutableStateOf<String?>(null) }
 
-    // Group sessions by date header
+    // Cancel booking confirmation dialog
+    var showCancelDialog by remember { mutableStateOf(false) }
+
+    if (showCancelDialog) {
+        AlertDialog(
+            onDismissRequest = { showCancelDialog = false },
+            containerColor   = Color.White,
+            shape            = RoundedCornerShape(20.dp),
+            icon = {
+                Icon(Icons.Outlined.WarningAmber, null,
+                    tint = StOrange, modifier = Modifier.size(30.dp))
+            },
+            title = {
+                Text("Cancel booking?", fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp, color = StTextPrimary,
+                    textAlign = TextAlign.Center)
+            },
+            text = {
+                Text(
+                    "The charger will be released and made available to others. " +
+                            "Any amount deducted will be refunded to your wallet.",
+                    fontSize = 14.sp, color = StTextSecondary,
+                    textAlign = TextAlign.Center, lineHeight = 22.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showCancelDialog = false; onCancelBooking() },
+                    colors  = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFEF4444)),
+                    shape   = RoundedCornerShape(12.dp)
+                ) { Text("Yes, cancel", fontWeight = FontWeight.Bold,
+                    color = Color.White) }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showCancelDialog = false },
+                    shape = RoundedCornerShape(12.dp)) {
+                    Text("Keep booking", color = StTextPrimary)
+                }
+            }
+        )
+    }
+
     val grouped: List<Pair<String, List<StSession>>> = remember {
         listOf("Today", "Yesterday", "Earlier").mapNotNull { group ->
             val sessions = dummySessions.filter { it.dateGroup == group }
@@ -162,7 +217,7 @@ fun StatusScreen(
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
 
-            // ── Screen title ───────────────────────────────────────────────
+            // Screen title
             item {
                 Text(
                     text       = "Status",
@@ -175,55 +230,64 @@ fun StatusScreen(
                 )
             }
 
-            // ── Active session card (only if live) ─────────────────────────
-            dummyActiveSession?.let { session ->
+            // ── Active BOOKING card ────────────────────────────────────────
+            // Shown when user booked + closed app + reopened
+            // Orange — "you have something to do" urgency
+            dummyActiveBooking?.let { booking ->
                 item {
-                    StActiveSessionCard(
-                        session = session,
-                        onTap   = onViewActiveSession,
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                    StActiveBookingCard(
+                        booking        = booking,
+                        onIveArrived   = onIveArrived,
+                        onCancelClick  = { showCancelDialog = true },
+                        modifier       = Modifier.padding(horizontal = 16.dp)
                     )
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(14.dp))
                 }
             }
 
-            // ── Lifetime stats strip ───────────────────────────────────────
+            // ── Active SESSION card ────────────────────────────────────────
+            // Shown when charging is in progress
+            // Green — "everything is working"
+            dummyActiveSession?.let { session ->
+                item {
+                    StActiveSessionCard(
+                        session  = session,
+                        onTap    = onViewActiveSession,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    Spacer(Modifier.height(14.dp))
+                }
+            }
+
+            // Lifetime stats
             if (dummySessions.isNotEmpty()) {
                 item {
                     StLifetimeStats(
-                        totalKwh  = lifetimeKwh,
-                        totalInr  = lifetimeInr,
-                        co2Grams  = lifetimeCo2g,
-                        modifier  = Modifier.padding(horizontal = 16.dp)
+                        totalKwh = lifetimeKwh,
+                        totalInr = lifetimeInr,
+                        co2Grams = lifetimeCo2g,
+                        modifier = Modifier.padding(horizontal = 16.dp)
                     )
                     Spacer(Modifier.height(20.dp))
                 }
             }
 
-            // ── Past sessions heading ──────────────────────────────────────
+            // Past sessions heading
             if (dummySessions.isNotEmpty()) {
                 item {
-                    Text(
-                        text       = "Past Sessions",
-                        fontSize   = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color      = StTextPrimary,
-                        modifier   = Modifier.padding(horizontal = 16.dp)
-                    )
+                    Text("Past Sessions", fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold, color = StTextPrimary,
+                        modifier   = Modifier.padding(horizontal = 16.dp))
                     Spacer(Modifier.height(10.dp))
                 }
 
-                // Grouped rows
                 grouped.forEach { (header, sessions) ->
                     item(key = "header_$header") {
-                        Text(
-                            text     = header,
-                            fontSize = 12.sp,
+                        Text(header, fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color    = StTextSecondary,
-                            modifier = Modifier.padding(
-                                horizontal = 16.dp, vertical = 6.dp)
-                        )
+                            color      = StTextSecondary,
+                            modifier   = Modifier.padding(
+                                horizontal = 16.dp, vertical = 6.dp))
                     }
                     items(sessions, key = { it.id }) { session ->
                         StSessionRow(
@@ -239,8 +303,7 @@ fun StatusScreen(
                     }
                 }
 
-            } else {
-                // ── Empty state ────────────────────────────────────────────
+            } else if (dummyActiveBooking == null && dummyActiveSession == null) {
                 item { StEmptyState() }
             }
         }
@@ -248,7 +311,146 @@ fun StatusScreen(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SECTION 4 — Active session card
+// SECTION 4 — Active BOOKING card
+//
+// Shown when: user booked → closed app → reopened
+// This solves the critical navigation gap — user can always find I've Arrived.
+//
+// Emotion: Urgency — "You have something to do before time runs out"
+// Color: Orange gradient — different from green (charging) on purpose
+//
+// Timer: counts down live from secondsLeft
+// When timer hits 0 → booking auto-expired → card disappears
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun StActiveBookingCard(
+    booking:       StActiveBooking,
+    onIveArrived:  () -> Unit,
+    onCancelClick: () -> Unit,
+    modifier:      Modifier = Modifier
+) {
+    // Live countdown — starts from booking.secondsLeft
+    var secondsLeft by remember { mutableIntStateOf(booking.secondsLeft) }
+
+    LaunchedEffect(Unit) {
+        while (secondsLeft > 0) {
+            kotlinx.coroutines.delay(1_000L)
+            secondsLeft--
+        }
+        // Timer expired — Phase 2: call cancel API, update UI state
+    }
+
+    val minutes    = secondsLeft / 60
+    val seconds    = secondsLeft % 60
+    val timerLabel = String.format(java.util.Locale.getDefault(), "%02d:%02d", minutes, seconds)
+    val isUrgent   = secondsLeft <= 60
+
+    // Orange for warning/pending, red tint when urgent
+    val cardGradient = if (isUrgent)
+        Brush.linearGradient(listOf(Color(0xFFEF4444), Color(0xFFDC2626)))
+    else
+        Brush.linearGradient(listOf(Color(0xFFF59E0B), Color(0xFFD97706)))
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(cardGradient)
+    ) {
+        Column(Modifier.padding(18.dp)) {
+
+            // Header row — booking label + timer
+            Row(
+                Modifier.fillMaxWidth(),
+                Arrangement.SpaceBetween,
+                Alignment.CenterVertically
+            ) {
+                Column {
+                    // Status label
+                    Row(
+                        verticalAlignment     = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(Icons.Outlined.BookmarkAdded, null,
+                            tint     = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.size(14.dp))
+                        Text("BOOKING ACTIVE", fontSize = 11.sp,
+                            fontWeight    = FontWeight.Bold,
+                            color         = Color.White.copy(alpha = 0.9f),
+                            letterSpacing = 1.sp)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(booking.chargerName,
+                        fontWeight = FontWeight.Bold,
+                        fontSize   = 15.sp,
+                        color      = Color.White,
+                        maxLines   = 1)
+                    Spacer(Modifier.height(2.dp))
+                    Text("${booking.packageName}  ·  ₹${booking.packageInr}",
+                        fontSize = 13.sp,
+                        color    = Color.White.copy(alpha = 0.85f))
+                }
+
+                // Timer — right side, large
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Time left", fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.75f))
+                    Text(timerLabel, fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color      = Color.White)
+                    if (isUrgent) {
+                        Text("Hurry!", fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color      = Color.White.copy(alpha = 0.9f))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Action buttons
+            Row(
+                Modifier.fillMaxWidth(),
+                Arrangement.spacedBy(10.dp)
+            ) {
+                // PRIMARY — I've Arrived (white filled — stands out on orange)
+                Button(
+                    onClick  = onIveArrived,
+                    modifier = Modifier.weight(1f).height(46.dp),
+                    shape    = RoundedCornerShape(12.dp),
+                    colors   = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor   = if (isUrgent) Color(0xFFEF4444)
+                        else Color(0xFFF59E0B)
+                    )
+                ) {
+                    Icon(Icons.Outlined.LocationOn, null,
+                        modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("I've Arrived",
+                        fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+
+                // SECONDARY — Cancel (outlined white)
+                OutlinedButton(
+                    onClick  = onCancelClick,
+                    modifier = Modifier.height(46.dp),
+                    shape    = RoundedCornerShape(12.dp),
+                    border   = androidx.compose.foundation.BorderStroke(
+                        1.5.dp, Color.White.copy(alpha = 0.6f)),
+                    colors   = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color.White)
+                ) {
+                    Text("Cancel", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECTION 5 — Active SESSION card
 //
 // Green gradient — same visual language as CHARGING header in SessionScreen.
 // Pulsing bolt + "LIVE" badge — impossible to miss.
@@ -479,9 +681,7 @@ private fun StStatCard(
 
             Text(value, fontSize = 18.sp,
                 fontWeight = FontWeight.Bold, color = StTextPrimary,
-                textAlign  = TextAlign.Center,
-                maxLines   = 1,
-                softWrap   = false)
+                textAlign  = TextAlign.Center)
 
             Text(label, fontSize = 10.sp,
                 color     = StTextSecondary,
