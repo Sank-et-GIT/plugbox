@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -73,8 +74,15 @@ dependencies {
     // Coroutines play services (for .await() on Tasks)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
+    // Import the Firebase BoM
+    implementation(platform("com.google.firebase:firebase-bom:34.11.0"))
+
+    // Firebase Auth Dependency
+    implementation("com.google.firebase:firebase-auth")
+
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.foundation)
+
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

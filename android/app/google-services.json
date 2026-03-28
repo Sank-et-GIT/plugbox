@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "184712230609",
+    "project_id": "plugbox-baded",
+    "storage_bucket": "plugbox-baded.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:184712230609:android:e2aedb630131c69157b7f0",
+        "android_client_info": {
+          "package_name": "com.example.plugbox"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBEaIb87BzRQwQMhnihL5hKRyRRcaZEziI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

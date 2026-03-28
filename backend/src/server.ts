@@ -1,4 +1,5 @@
 import app from "./app";
+import "dotenv/config";
 import { startOfflineChecker } from "./jobs/offlineCheck";
 import { startBookingExpiryChecker } from "./jobs/bookingExpiry";
 
