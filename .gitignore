@@ -97,3 +97,19 @@ backend/node_modules/
 backend/.env
 backend/*.json
 !android/app/google-services.json
+
+# Firebase credentials
+firebase-service-account.json
+plugbox-baded-firebase-adminsdk-fbsvc-176078696c.json
+
+# env files
+.env
+
+node_modules/
+node_modules/
+.env
+plugbox-baded-firebase-adminsdk-fbsvc-176078696c.json
+
+node_modules/
+.env
+plugbox-baded-firebase-adminsdk-fbsvc-176078696c.json

@@ -43,10 +43,12 @@ const prisma = new PrismaClient();
 // ── Initialize Firebase Admin SDK (once) ──────────────────────────────────────
 // Reads service account JSON from path specified in .env
 if (!admin.apps.length) {
-  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT
-    ?? "./firebase-service-account.json";
+ const serviceAccountPath =
+  process.env.FIREBASE_SERVICE_ACCOUNT ?? "./firebase-service-account.json";
 
-  const absolutePath = path.resolve(serviceAccountPath);
+const absolutePath = path.isAbsolute(serviceAccountPath)
+  ? serviceAccountPath
+  : path.resolve(process.cwd(), serviceAccountPath);
 
   if (!fs.existsSync(absolutePath)) {
     console.error(

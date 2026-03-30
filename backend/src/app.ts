@@ -1,19 +1,27 @@
 import express from "express";
-import cors from "cors";
+import cors    from "cors";
 
-import deviceRoutes from "./routes/device";
-import chargersRoutes from "./routes/chargers";
-import adminRoutes from "./routes/admin";
-import bookingsRoutes from "./routes/bookings";
+import deviceRoutes         from "./routes/device";
+import chargersRoutes       from "./routes/chargers";
+import adminRoutes          from "./routes/admin";
+import bookingsRoutes       from "./routes/bookings";
 import deviceCommandsRoutes from "./routes/deviceCommands";
-import sessionsRoutes from "./routes/sessions";
-import deviceStatusRoutes from "./routes/deviceStatus";
-import authRoutes from "./routes/auth";          // ← NEW: auth routes
+import sessionsRoutes       from "./routes/sessions";
+import deviceStatusRoutes   from "./routes/deviceStatus";
+import authRoutes           from "./routes/auth";
+import walletRoutes         from "./routes/wallet";    // ← NEW
 
 const app = express();
 
 app.set("trust proxy", true);
 app.use(cors());
+
+// ── Raw body for Razorpay webhook signature verification ──────────────────────
+// Must come BEFORE express.json()
+// Razorpay webhook needs raw body to verify HMAC signature
+app.use("/wallet/razorpay-webhook", express.raw({ type: "application/json" }));
+
+// JSON for all other routes
 app.use(express.json());
 
 // Request logger
@@ -33,14 +41,15 @@ app.get("/health", (_req, res) => {
 });
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-app.use("/auth", authRoutes);                    // ← NEW: phone OTP auth
+app.use("/auth",     authRoutes);
+app.use("/wallet",   walletRoutes);         // ← NEW
 app.use("/bookings", bookingsRoutes);
-app.use("/device", deviceCommandsRoutes);
+app.use("/device",   deviceCommandsRoutes);
 app.use("/sessions", sessionsRoutes);
-app.use("/device", deviceStatusRoutes);
-app.use("/device", deviceRoutes);
+app.use("/device",   deviceStatusRoutes);
+app.use("/device",   deviceRoutes);
 app.use("/chargers", chargersRoutes);
-app.use("/admin", adminRoutes);
+app.use("/admin",    adminRoutes);
 
 // 404
 app.use((_req, res) => {
