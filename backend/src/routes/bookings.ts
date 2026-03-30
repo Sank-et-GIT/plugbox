@@ -5,11 +5,11 @@
 //      Two simultaneous booking requests cannot both succeed
 // ─────────────────────────────────────────────────────────────────────────────
 
+import prisma from "../lib/prismaClient";
 import { Router, Request, Response } from "express";
-import { PrismaClient, BookingStatus, WalletTxnType } from "@prisma/client";
+import { BookingStatus, WalletTxnType } from "@prisma/client";
 
 const router = Router();
-const prisma  = new PrismaClient();
 
 const HOLD_MINUTES           = 10;
 const SECURITY_DEPOSIT_PAISE = 10_000;

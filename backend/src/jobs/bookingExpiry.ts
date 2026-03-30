@@ -5,9 +5,10 @@
 // Finds HOLD bookings past expiresAt → marks EXPIRED → full refund to wallet.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { PrismaClient, BookingStatus, WalletTxnType } from "@prisma/client";
+import prisma from "../lib/prismaClient";
+import { BookingStatus, WalletTxnType } from "@prisma/client";
 
-const prisma = new PrismaClient();
+
 
 export async function runBookingExpiry(): Promise<void> {
   const expiredBookings = await prisma.booking.findMany({
