@@ -7,12 +7,12 @@
 //   3. fetch() — requires Node 18+. Run `node --version` to verify.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import prisma from "../lib/prismaClient";
 import { Router, Request, Response } from "express";
-import { PrismaClient, WalletTxnType } from "@prisma/client";
+import { WalletTxnType } from "@prisma/client";
 import * as crypto from "crypto";
 
 const router = Router();
-const prisma  = new PrismaClient();
 
 const RAZORPAY_KEY_ID     = process.env.RAZORPAY_KEY_ID     ?? "";
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET ?? "";

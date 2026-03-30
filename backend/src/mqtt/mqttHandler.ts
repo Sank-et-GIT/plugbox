@@ -1,45 +1,43 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/mqtt/mqttHandler.ts
 //
-// PERFECT VERSION — fixes:
-//   1. Charger looked up by MAC address (deviceId) — not hardcoded ID
-//   2. New chargers auto-registered on first heartbeat
-//   3. DeviceCommand marked ACKED when door ACK arrives
-//   4. sessionId linked to EnergyReading
-//   5. subscribeAllChargers() called after new charger registers
+// FIX: Does NOT import from mqttClient (circular import removed).
+//   mqttPublish and subscribeAllChargers are passed in via initMqttHandler()
+//   called from app.ts after both modules are loaded.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { PrismaClient, SessionStatus, CommandStatus, CommandType } from "@prisma/client";
-import { subscribeAllChargers } from "./mqttClient";
+import { SessionStatus, CommandStatus, CommandType } from "@prisma/client";
+import prisma from "../lib/prismaClient";
 
-const prisma = new PrismaClient();
+// These are injected from app.ts to avoid circular import
+let _mqttPublish:           (topic: string, message: string) => void;
+let _subscribeAllChargers:  () => Promise<void>;
+
+export function initMqttHandler(
+  publishFn:           (topic: string, message: string) => void,
+  subscribeAllFn:      () => Promise<void>
+): void {
+  _mqttPublish          = publishFn;
+  _subscribeAllChargers = subscribeAllFn;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main message router
-// Topic format: {mqttTopic}/data|door|status
-// e.g. "pb_device_01/data" → prefix = "pb_device_01", suffix = "data"
 // ─────────────────────────────────────────────────────────────────────────────
-
 export async function handleMqttMessage(topic: string, payload: string): Promise<void> {
   try {
     const lastSlash = topic.lastIndexOf("/");
     if (lastSlash === -1) return;
 
-    const mqttTopic = topic.substring(0, lastSlash);   // e.g. "pb_device_01"
-    const suffix    = topic.substring(lastSlash + 1);  // e.g. "data"
+    const mqttTopic = topic.substring(0, lastSlash);
+    const suffix    = topic.substring(lastSlash + 1);
 
     switch (suffix) {
-      case "data":
-        await handleEnergyData(mqttTopic, payload);
-        break;
-      case "door":
-        await handleDoorAck(mqttTopic, payload);
-        break;
-      case "status":
-        await handleDeviceStatus(mqttTopic, payload);
-        break;
+      case "data":   await handleEnergyData(mqttTopic, payload);   break;
+      case "ir":     await handleIrEvent(mqttTopic, payload);      break;
+      case "status": await handleDeviceStatus(mqttTopic, payload); break;
       default:
-        console.log(`[MQTT] Unhandled suffix: ${suffix} on topic: ${topic}`);
+        console.log(`[MQTT] Unhandled: ${topic}`);
     }
   } catch (err) {
     console.error(`[MQTT] Error handling ${topic}:`, err);
@@ -47,32 +45,22 @@ export async function handleMqttMessage(topic: string, payload: string): Promise
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper: find charger by mqttTopic prefix
-// Returns null if not found — caller decides what to do
+// Helper: find charger by mqttTopic
 // ─────────────────────────────────────────────────────────────────────────────
-
-async function findChargerByTopic(mqttTopic: string) {
-  return prisma.charger.findFirst({
-    where: { mqttTopic }
-  });
+async function findCharger(mqttTopic: string) {
+  return prisma.charger.findFirst({ where: { mqttTopic } });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// pb_device_01/data → PZEM energy readings
-//
-// Payload: {"voltage":230.1,"current":2.5,"power":575,"energy":0.12,"frequency":50,"pf":0.96}
-//      or: {"status":"no_load","voltage":230.1}
+// /data → PZEM energy readings
 // ─────────────────────────────────────────────────────────────────────────────
-
 async function handleEnergyData(mqttTopic: string, payload: string): Promise<void> {
   let data: any;
   try { data = JSON.parse(payload); }
   catch { console.warn("[MQTT] Invalid JSON on /data:", payload); return; }
 
-  // Skip no-load status messages
   if (data.status === "no_load") return;
 
-  // Validate required fields
   if (
     typeof data.voltage   !== "number" ||
     typeof data.current   !== "number" ||
@@ -81,26 +69,23 @@ async function handleEnergyData(mqttTopic: string, payload: string): Promise<voi
     typeof data.frequency !== "number" ||
     typeof data.pf        !== "number"
   ) {
-    console.warn("[MQTT] Missing fields in energy data:", payload);
+    console.warn("[MQTT] Missing fields in /data:", payload);
     return;
   }
 
-  const charger = await findChargerByTopic(mqttTopic);
-  if (!charger) {
-    console.warn(`[MQTT] No charger found for topic: ${mqttTopic}`);
-    return;
-  }
+  const charger = await findCharger(mqttTopic);
+  if (!charger) return;
 
-  // Find active session for this charger (to link reading)
+  // Find active session to link reading
   const activeSession = await prisma.session.findFirst({
     where: {
       chargerId: charger.id,
-      status: { in: [SessionStatus.UNLOCKED, SessionStatus.ACTIVE] }
+      status:    { in: [SessionStatus.PLUG_WAIT, SessionStatus.ACTIVE] }
     },
     orderBy: { createdAt: "desc" }
   });
 
-  // Store energy reading with sessionId if available
+  // Store reading
   await prisma.energyReading.create({
     data: {
       chargerId:   charger.id,
@@ -114,154 +99,155 @@ async function handleEnergyData(mqttTopic: string, payload: string): Promise<voi
     }
   });
 
-  // If current is flowing and session is UNLOCKED → mark ACTIVE
-  // Threshold 0.05A filters out noise
-  if (data.current > 0.05 && activeSession?.status === SessionStatus.UNLOCKED) {
+  // Current detected → move PLUG_WAIT → ACTIVE
+  if (data.current >= 0.05 && activeSession?.status === SessionStatus.PLUG_WAIT) {
     await prisma.session.update({
       where: { id: activeSession.id },
       data:  { status: SessionStatus.ACTIVE, startedAt: new Date() }
     });
-    console.log(`[MQTT] Session ${activeSession.id} → ACTIVE (current: ${data.current}A)`);
+    console.log(`[MQTT] Session ${activeSession.id} → ACTIVE (${data.current}A)`);
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// pb_device_01/door → solenoid ACK from ESP32
-//
-// Payload: {"door":"unlocked","state":"online"}
-//      or: {"door":"locked","state":"online"}
-//
-// PERFECT FIX: Also marks DeviceCommand as ACKED for full audit trail
+// /ir → IR sensor door events
 // ─────────────────────────────────────────────────────────────────────────────
-
-async function handleDoorAck(mqttTopic: string, payload: string): Promise<void> {
+async function handleIrEvent(mqttTopic: string, payload: string): Promise<void> {
   let data: any;
   try { data = JSON.parse(payload); }
-  catch { console.warn("[MQTT] Invalid JSON on /door:", payload); return; }
+  catch { console.warn("[MQTT] Invalid JSON on /ir:", payload); return; }
 
-  console.log(`[MQTT] Door ACK from ${mqttTopic}: ${payload}`);
+  console.log(`[MQTT] IR: ${payload}`);
 
-  const charger = await findChargerByTopic(mqttTopic);
+  const charger = await findCharger(mqttTopic);
   if (!charger) return;
 
-  if (data.door === "unlocked") {
-    // Find UNLOCK_SENT session → mark UNLOCKED
-    const session = await prisma.session.findFirst({
-      where:   { chargerId: charger.id, status: SessionStatus.UNLOCK_SENT },
-      orderBy: { createdAt: "desc" }
-    });
-
-    if (session) {
-      await prisma.session.update({
-        where: { id: session.id },
-        data:  { status: SessionStatus.UNLOCKED }
-      });
-      console.log(`[MQTT] Session ${session.id} → UNLOCKED`);
-
-      // ── PERFECT FIX: Mark DeviceCommand as ACKED ───────────────────────────
-      // Finds the most recent PENDING UNLOCK command for this session
-      // and marks it ACKED with timestamp — completes the audit trail
-      const pendingCmd = await prisma.deviceCommand.findFirst({
-        where: {
-          sessionId: session.id,
-          type:      CommandType.UNLOCK,
-          status:    CommandStatus.PENDING,
-        },
-        orderBy: { createdAt: "desc" }
-      });
-
-      if (pendingCmd) {
-        await prisma.deviceCommand.update({
-          where: { id: pendingCmd.id },
-          data:  { status: CommandStatus.ACKED, ackedAt: new Date() }
-        });
-        console.log(`[MQTT] DeviceCommand ${pendingCmd.id} → ACKED`);
-      }
-    }
+  if (data.event === "door_closed") {
+    await handleDoorClosed(charger.id, mqttTopic, data.button_pressed === true);
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// pb_device_01/status → device online/offline + auto-registration
-//
-// Payload: "online" or "offline"
-//      or: {"status":"online","mac":"AA:BB:CC:DD:EE:FF","firmware":"1.0.0"}
-//
-// PERFECT FIX: Auto-registers new charger if MAC not seen before
-//              Triggers subscribeAllChargers() to pick up new topics
+// Door closed with button state
 // ─────────────────────────────────────────────────────────────────────────────
+async function handleDoorClosed(
+  chargerId:     number,
+  mqttTopic:     string,
+  buttonPressed: boolean
+): Promise<void> {
 
+  if (!buttonPressed) {
+    console.log(`[MQTT] Door closed without button — no action`);
+    return;
+  }
+
+  const session = await prisma.session.findFirst({
+    where: {
+      chargerId,
+      status: { in: [SessionStatus.UNLOCKED, SessionStatus.PLUG_WAIT] }
+    },
+    orderBy: { createdAt: "desc" }
+  });
+
+  if (!session) {
+    console.warn(`[MQTT] No UNLOCKED session for charger ${chargerId}`);
+    return;
+  }
+
+  // Session → PLUG_WAIT with timestamp for 3min timeout
+  await prisma.session.update({
+    where: { id: session.id },
+    data:  {
+      status:            SessionStatus.PLUG_WAIT,
+      plugWaitStartedAt: new Date(),
+    }
+  });
+
+  // Lock solenoid
+  _mqttPublish(`${mqttTopic}/door`, "SOLENOID_LOCK");
+
+  // Mark UNLOCK command as ACKED
+  const pendingCmd = await prisma.deviceCommand.findFirst({
+    where: {
+      sessionId: session.id,
+      type:      CommandType.UNLOCK,
+      status:    CommandStatus.PENDING,
+    },
+    orderBy: { createdAt: "desc" }
+  });
+
+  if (pendingCmd) {
+    await prisma.deviceCommand.update({
+      where: { id: pendingCmd.id },
+      data:  { status: CommandStatus.ACKED, ackedAt: new Date() }
+    });
+    console.log(`[MQTT] DeviceCommand ${pendingCmd.id} → ACKED`);
+  }
+
+  console.log(`[MQTT] Session ${session.id} → PLUG_WAIT | SOLENOID_LOCK sent`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// /status → device online/offline + auto-registration
+// ─────────────────────────────────────────────────────────────────────────────
 async function handleDeviceStatus(mqttTopic: string, payload: string): Promise<void> {
-  // Parse payload — can be plain string or JSON
   let status = "online";
-  let mac: string | null = null;
-  let firmware: string | null = null;
+  let mac:    string | null = null;
 
   try {
     const data = JSON.parse(payload);
-    status   = data.status   ?? "online";
-    mac      = data.mac      ?? null;
-    firmware = data.firmware ?? null;
+    status = data.status ?? "online";
+    mac    = data.mac    ?? null;
   } catch {
-    // Plain string payload: "online" or "offline"
     status = payload.trim().toLowerCase();
   }
 
   const isOnline = status === "online";
-
-  // Find charger by mqttTopic
-  let charger = await findChargerByTopic(mqttTopic);
+  let charger    = await findCharger(mqttTopic);
 
   if (!charger && mac) {
-    // ── Auto-registration ─────────────────────────────────────────────────────
-    // New hardware seen for first time — check if charger with this MAC exists
     charger = await prisma.charger.findFirst({ where: { deviceId: mac } });
 
     if (!charger) {
-      // Brand new charger — create record
-      // Admin will update name, lat, lng later via admin panel
+      // Auto-register new charger
       charger = await prisma.charger.create({
         data: {
-          name:      `New Charger (${mqttTopic})`,
-          lat:       0,
-          lng:       0,
-          status:    "ONLINE",
-          deviceId:  mac,
-          mqttTopic: mqttTopic,
-          lastSeen:  new Date(),
+          name:        `New Charger (${mqttTopic})`,
+          displayName: "PlugBox #1",
+          lat:         0,
+          lng:         0,
+          status:      "ONLINE",
+          deviceId:    mac,
+          mqttTopic:   mqttTopic,
+          lastSeen:    new Date(),
         }
       });
-      console.log(`[MQTT] ✨ New charger auto-registered: id=${charger.id} mac=${mac} topic=${mqttTopic}`);
-
-      // Subscribe to this charger's topics now that it's registered
-      await subscribeAllChargers();
+      console.log(`[MQTT] ✨ Auto-registered: id=${charger.id} mac=${mac} topic=${mqttTopic}`);
+      await _subscribeAllChargers();
       return;
 
     } else if (!charger.mqttTopic) {
-      // Charger exists by MAC but mqttTopic was never set — update it
       charger = await prisma.charger.update({
         where: { id: charger.id },
         data:  { mqttTopic, status: "ONLINE", lastSeen: new Date() }
       });
-      await subscribeAllChargers();
+      await _subscribeAllChargers();
     }
   }
 
   if (!charger) {
-    console.warn(`[MQTT] Unknown charger on topic: ${mqttTopic} — publish with MAC to auto-register`);
+    console.warn(`[MQTT] Unknown charger: ${mqttTopic} — needs MAC to auto-register`);
     return;
   }
 
-  // Update charger status + lastSeen
   await prisma.charger.update({
     where: { id: charger.id },
     data:  {
       status:   isOnline ? "ONLINE" : "OFFLINE",
       lastSeen: isOnline ? new Date() : undefined,
-      ...(mac      ? { deviceId: mac }       : {}),
-      ...(firmware ? { } : {}),  // Phase 2: store firmware version
+      ...(mac ? { deviceId: mac } : {}),
     }
   });
 
-  console.log(`[MQTT] Charger ${charger.id} (${mqttTopic}) → ${status.toUpperCase()}${mac ? ` mac=${mac}` : ""}`);
+  console.log(`[MQTT] Charger ${charger.id} (${mqttTopic}) → ${status.toUpperCase()}`);
 }

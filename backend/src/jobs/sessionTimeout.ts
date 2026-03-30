@@ -6,10 +6,11 @@
 //      It never changes after that → reliable 3min timeout
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { PrismaClient, SessionStatus, WalletTxnType } from "@prisma/client";
+import prisma from "../lib/prismaClient";
+import { SessionStatus, WalletTxnType } from "@prisma/client";
 import { mqttPublish } from "../mqtt/mqttClient";
 
-const prisma = new PrismaClient();
+
 
 const PLUG_WAIT_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
 

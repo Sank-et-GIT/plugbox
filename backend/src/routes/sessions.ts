@@ -5,9 +5,9 @@
 //      Used by sessionTimeout.ts for accurate 3min timer
 // ─────────────────────────────────────────────────────────────────────────────
 
+import prisma from "../lib/prismaClient";
 import { Router, Request, Response } from "express";
 import {
-  PrismaClient,
   BookingStatus,
   SessionStatus,
   CommandType,
@@ -17,7 +17,6 @@ import {
 import { mqttPublish } from "../mqtt/mqttClient";
 
 const router = Router();
-const prisma  = new PrismaClient();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /sessions/start
