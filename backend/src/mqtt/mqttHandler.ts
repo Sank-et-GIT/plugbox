@@ -137,10 +137,23 @@ async function handleDoorClosed(
 ): Promise<void> {
 
   if (!buttonPressed) {
-    console.log(`[MQTT] Door closed without button — no action`);
+    // Door closed without button press
+    // If session is ENDED → user finished and closed lid → lock idle charger
+    const endedSession = await prisma.session.findFirst({
+      where:   { chargerId, status: SessionStatus.ENDED },
+      orderBy: { createdAt: "desc" }
+    });
+
+    if (endedSession) {
+      _mqttPublish(`${mqttTopic}/door`, "SOLENOID_LOCK");
+      console.log(`[MQTT] Session ENDED — door closed → SOLENOID_LOCK (charger secured)`);
+    } else {
+      console.log(`[MQTT] Door closed without button — no action`);
+    }
     return;
   }
 
+  // Button was pressed inside lid
   const session = await prisma.session.findFirst({
     where: {
       chargerId,
@@ -154,7 +167,7 @@ async function handleDoorClosed(
     return;
   }
 
-  // Session → PLUG_WAIT with timestamp for 3min timeout
+  // Session → PLUG_WAIT with timestamp
   await prisma.session.update({
     where: { id: session.id },
     data:  {
@@ -162,9 +175,6 @@ async function handleDoorClosed(
       plugWaitStartedAt: new Date(),
     }
   });
-
-  // Lock solenoid
-  _mqttPublish(`${mqttTopic}/door`, "SOLENOID_LOCK");
 
   // Mark UNLOCK command as ACKED
   const pendingCmd = await prisma.deviceCommand.findFirst({
@@ -184,7 +194,15 @@ async function handleDoorClosed(
     console.log(`[MQTT] DeviceCommand ${pendingCmd.id} → ACKED`);
   }
 
-  console.log(`[MQTT] Session ${session.id} → PLUG_WAIT | SOLENOID_LOCK sent`);
+  console.log(`[MQTT] Session ${session.id} → PLUG_WAIT (button pressed)`);
+
+  // Auto-lock solenoid 10 seconds after button press
+  // User has had time to close the lid
+  // sessionTimeout job handles notification if door still open after 3min
+  setTimeout(() => {
+    _mqttPublish(`${mqttTopic}/door`, "SOLENOID_LOCK");
+    console.log(`[MQTT] Session ${session.id} → SOLENOID_LOCK (10s after button press)`);
+  }, 10_000);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
