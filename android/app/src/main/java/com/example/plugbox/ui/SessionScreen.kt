@@ -67,7 +67,9 @@ import androidx.compose.ui.unit.sp
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import com.example.plugbox.network.ApiClient
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlin.math.*
 import kotlin.math.roundToInt
@@ -140,11 +142,13 @@ private fun distanceMeters(
 fun SessionScreen(
     charger:      UiCharger,
     pkg:          UiPackage,
+    sessionId:    Int   = 0,
     onDone:       () -> Unit,
     onCancel:     () -> Unit,
     modifier:     Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val scope   = rememberCoroutineScope()
 
     // ── Stage state ───────────────────────────────────────────────────────────
     var stage by remember { mutableStateOf(Stage.GRACE) }
@@ -221,12 +225,23 @@ fun SessionScreen(
         if (stage != Stage.CHARGING) return@LaunchedEffect
         while (stage == Stage.CHARGING) {
             delay(POLL_INTERVAL_MS)
-            // TODO Phase 2: replace with real API
-            // val reading = ApiClient.api.getMeterReading(sessionId)
-            // usedKwh = reading.usedKwh; usedInr = reading.usedInr
-            val newKwh = (usedKwh + 0.025).coerceAtMost(pkg.kwhLimit)
-            usedKwh = newKwh
-            usedInr = (newKwh * ratePerKwh).roundToInt()
+            try {
+                if (sessionId > 0) {
+                    val reading = ApiClient.api.meter(sessionId)
+                    if (reading.ok) {
+                        usedKwh = reading.usedKwh
+                        usedInr = (reading.usedKwh * ratePerKwh).roundToInt()
+                        if (reading.status == "ENDED") stage = Stage.COMPLETE
+                    }
+                } else {
+                    // Simulation fallback when sessionId not set
+                    val newKwh = (usedKwh + 0.025).coerceAtMost(pkg.kwhLimit)
+                    usedKwh = newKwh
+                    usedInr = (newKwh * ratePerKwh).roundToInt()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("SessionScreen", "Meter poll failed: ${e.message}")
+            }
             if (usedKwh >= pkg.kwhLimit) stage = Stage.COMPLETE
         }
     }
@@ -279,7 +294,21 @@ fun SessionScreen(
             },
             confirmButton = {
                 Button(
-                    onClick = { showStopDialog = false; stage = Stage.COMPLETE },
+                    onClick = {
+                        showStopDialog = false
+                        scope.launch {
+                            try {
+                                if (sessionId > 0) {
+                                    ApiClient.api.stop(
+                                        com.example.plugbox.network.StopRequest(sessionId)
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                android.util.Log.e("SessionScreen", "Stop failed: ${e.message}")
+                            }
+                            stage = Stage.COMPLETE
+                        }
+                    },
                     colors  = ButtonDefaults.buttonColors(containerColor = SsRed),
                     shape   = RoundedCornerShape(12.dp)
                 ) { Text("Stop", fontWeight = FontWeight.Bold, color = SsWhite) }

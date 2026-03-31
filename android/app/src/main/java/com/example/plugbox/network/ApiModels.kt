@@ -1,20 +1,15 @@
 package com.example.plugbox.network
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ApiModels.kt
-// CHANGES: Firebase auth models added. OTP models removed (Firebase handles OTP).
-// All charging models untouched.
+// ApiModels.kt — PlugBox v2
+// All request/response models matching backend exactly
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Existing responses ────────────────────────────────────────────────────────
-
+// ── Health ────────────────────────────────────────────────────────────────────
 data class HealthResponse(val status: String)
-data class ChargersResponse(val chargers: List<Charger>)
-data class HoldResponse(val ok: Boolean, val booking: Booking)
-data class StartResponse(val ok: Boolean, val sessionId: Int, val commandId: Int)
-data class StopResponse(val ok: Boolean)
 
-// ── Existing entities ─────────────────────────────────────────────────────────
+// ── Chargers ──────────────────────────────────────────────────────────────────
+data class ChargersResponse(val chargers: List<Charger>)
 
 data class Charger(
     val id:                 Int,
@@ -23,41 +18,176 @@ data class Charger(
     val lng:                Double,
     val status:             String,
     val lastSeen:           String?,
-    val lastSeenSecondsAgo: Long?
+    val lastSeenSecondsAgo: Long?,
+    val slotNumber:         Int?    = 1,
+    val displayName:        String? = null,
+    val mqttTopic:          String? = null,
 )
 
+// ── Wallet ────────────────────────────────────────────────────────────────────
+data class WalletResponse(
+    val ok:           Boolean,
+    val balance:      Int     = 0,    // paise
+    val balanceInr:   Double  = 0.0,  // rupees for display
+    val deposit:      Int     = 0,
+    val depositInr:   Double  = 0.0,
+    val transactions: List<WalletTxn> = emptyList(),
+    val error:        String? = null
+)
+
+data class WalletTxn(
+    val id:         String,
+    val type:       String,   // TOPUP / PACKAGE_DEBIT / REFUND / DEPOSIT_COLLECT
+    val amountInr:  Double,
+    val balanceInr: Double,
+    val note:       String?,
+    val createdAt:  String
+)
+
+// POST /wallet/create-order
+data class CreateOrderRequest(
+    val userId:       String,
+    val amountPaise:  Int,
+    val purpose:      String,  // "topup" | "first_booking" | "shortfall"
+    val bookingMeta:  BookingMeta? = null
+)
+
+data class BookingMeta(
+    val chargerId:    Int,
+    val packageName:  String,
+    val packagePaise: Int,
+    val kwhLimit:     Double
+)
+
+data class CreateOrderResponse(
+    val ok:       Boolean,
+    val orderId:  String? = null,
+    val amount:   Int?    = null,
+    val currency: String? = null,
+    val keyId:    String? = null,
+    val error:    String? = null
+)
+
+// POST /wallet/verify-payment
+data class VerifyPaymentRequest(
+    val razorpayPaymentId:  String,
+    val razorpayOrderId:    String,
+    val razorpaySignature:  String,
+    val userId:             String
+)
+
+data class VerifyPaymentResponse(
+    val ok:        Boolean,
+    val processed: Boolean = false,
+    val bookingId: Int?    = null,
+    val error:     String? = null
+)
+
+// ── Bookings ──────────────────────────────────────────────────────────────────
+
+// POST /bookings/hold
+data class HoldRequest(
+    val chargerId:    Int,
+    val userId:       String,
+    val packageName:  String,
+    val packagePaise: Int,
+    val kwhLimit:     Double
+)
+
+data class HoldResponse(
+    val ok:                  Boolean,
+    val bookingId:           Int?    = null,
+    val expiresAt:           String? = null,
+    val packageName:         String? = null,
+    val packagePaise:        Int?    = null,
+    val kwhLimit:            Double? = null,
+    // Error fields
+    val reason:              String? = null,  // "insufficient_balance" | "already_held"
+    val needsDeposit:        Boolean = false,
+    val shortfallPaise:      Int?    = null,
+    val totalRequiredPaise:  Int?    = null,
+    val currentBalancePaise: Int?    = null,
+    val depositPaise:        Int?    = null,
+    val error:               String? = null
+)
+
+// Booking entity (used in responses)
 data class Booking(
-    val id:        Int,
-    val chargerId: Int,
-    val userId:    String,
-    val status:    String,
-    val expiresAt: String,
-    val createdAt: String,
-    val updatedAt: String
+    val id:          Int,
+    val chargerId:   Int,
+    val userId:      String,
+    val status:      String,
+    val packageName: String,
+    val expiresAt:   String,
+    val createdAt:   String,
 )
 
-// ── Existing requests ─────────────────────────────────────────────────────────
+// ── Sessions ──────────────────────────────────────────────────────────────────
 
-data class HoldRequest(val chargerId: Int, val userId: String)
+// POST /sessions/start
 data class StartRequest(val chargerId: Int, val userId: String)
+
+data class StartResponse(
+    val ok:        Boolean,
+    val sessionId: Int?    = null,
+    val commandId: Int?    = null,
+    val error:     String? = null
+)
+
+// POST /sessions/stop
 data class StopRequest(val sessionId: Int)
 
-// ─────────────────────────────────────────────────────────────────────────────
-// NEW — Firebase Auth models
-// ─────────────────────────────────────────────────────────────────────────────
+data class StopResponse(
+    val ok:         Boolean,
+    val sessionId:  Int?    = null,
+    val finalKwh:   Double? = null,
+    val usedInr:    Double? = null,
+    val refundInr:  Double? = null,
+    val packageInr: Double? = null,
+    val error:      String? = null
+)
 
-// POST /auth/firebase-login
-// Android sends Firebase idToken → backend verifies → returns our JWT
+// GET /sessions/meter/:sessionId
+data class MeterResponse(
+    val ok:                  Boolean,
+    val sessionId:           Int?    = null,
+    val status:              String? = null,
+    val usedKwh:             Double  = 0.0,
+    val remainingBalanceInr: Double  = 0.0,
+    val etaMinutes:          Int     = 0,
+    val usedInr:             Double  = 0.0,
+    val refundInr:           Double  = 0.0,
+    val error:               String? = null
+)
+
+// GET /sessions/active/:userId
+data class ActiveSessionResponse(
+    val ok:           Boolean,
+    val active:       Boolean = false,
+    val sessionId:    Int?    = null,
+    val status:       String? = null,
+    val chargerId:    Int?    = null,
+    val chargerName:  String? = null,
+    val chargerLat:   Double? = null,
+    val chargerLng:   Double? = null,
+    val packageName:  String? = null,
+    val packagePaise: Int?    = null,
+    val kwhLimit:     Double? = null,
+    val startedAt:    String? = null,
+    val error:        String? = null
+)
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
 data class FirebaseLoginRequest(val idToken: String)
+
 data class FirebaseLoginResponse(
     val ok:        Boolean,
-    val token:     String?  = null,   // our JWT — save to SharedPreferences
-    val userId:    String?  = null,   // UUID — use in hold/start/stop requests
-    val name:      String?  = null,   // empty string for new users
-    val isNewUser: Boolean  = false,  // true → show name entry step
+    val token:     String?  = null,
+    val userId:    String?  = null,
+    val name:      String?  = null,
+    val isNewUser: Boolean  = false,
     val error:     String?  = null
 )
 
-// POST /auth/update-name (requires Authorization: Bearer <token>)
 data class UpdateNameRequest(val name: String)
 data class UpdateNameResponse(val ok: Boolean, val error: String? = null)
