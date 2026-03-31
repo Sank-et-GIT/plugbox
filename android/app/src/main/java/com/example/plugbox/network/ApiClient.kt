@@ -5,75 +5,22 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ApiClient.kt
-//
-// CHANGES:
-//   • Added AuthInterceptor — reads JWT from SharedPreferences,
-//     adds "Authorization: Bearer <token>" to every request automatically.
-//   • Added init(context), saveToken(), getUserId(), clearAuth() helpers.
-//   • Call ApiClient.init(context) once in MainActivity before any API call.
-//
-// Phase 2: swap SharedPreferences for EncryptedSharedPreferences (security)
-// ─────────────────────────────────────────────────────────────────────────────
+import androidx.core.content.edit
 
 object ApiClient {
-    private const val BASE_URL = "http://64.227.166.155:8080"
 
-    private var appContext: Context? = null
+    private const val BASE_URL    = "http://64.227.166.155:8080/"
+    private const val PREFS_NAME  = "plugbox_prefs"
+    private const val KEY_USER_ID = "user_id"
+    private const val KEY_TOKEN   = "auth_token"
 
-    // Call once from MainActivity.onCreate()
+    // Called from MainActivity.onCreate
     fun init(context: Context) {
-        appContext = context.applicationContext
+        // Nothing to do currently — future: load cached token, init analytics etc.
     }
 
-    // Read token for auth interceptor
-    private fun getToken(): String? =
-        appContext
-            ?.getSharedPreferences("plugbox_prefs", Context.MODE_PRIVATE)
-            ?.getString("auth_token", null)
-
-    // Save after successful login
-    fun saveToken(context: Context, token: String, userId: String) {
-        context.getSharedPreferences("plugbox_prefs", Context.MODE_PRIVATE)
-            .edit()
-            .putString("auth_token", token)
-            .putString("user_id", userId)
-            .putBoolean("logged_in", true)
-            .apply()
-    }
-
-    // Read userId — pass to Hold/Start/Stop requests
-    fun getUserId(context: Context): String? =
-        context.getSharedPreferences("plugbox_prefs", Context.MODE_PRIVATE)
-            .getString("user_id", null)
-
-    // Clear on logout or delete account
-    fun clearAuth(context: Context) {
-        context.getSharedPreferences("plugbox_prefs", Context.MODE_PRIVATE)
-            .edit()
-            .remove("auth_token")
-            .remove("user_id")
-            .putBoolean("logged_in", false)
-            .apply()
-    }
-
-    // OkHttp with auth interceptor + logging
-    private val client by lazy {
+    private val httpClient by lazy {
         OkHttpClient.Builder()
-            .addInterceptor { chain ->
-                // Attach JWT to every request that has a token stored
-                val token   = getToken()
-                val request = if (token != null) {
-                    chain.request().newBuilder()
-                        .addHeader("Authorization", "Bearer $token")
-                        .build()
-                } else {
-                    chain.request()
-                }
-                chain.proceed(request)
-            }
             .addInterceptor(HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.BODY
             })
@@ -83,9 +30,39 @@ object ApiClient {
     val api: PlugBoxApi by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
-            .client(client)
+            .client(httpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(PlugBoxApi::class.java)
+    }
+
+    // ── Session helpers ───────────────────────────────────────────────────────
+
+    // Called from LoginScreen after successful Firebase + backend login
+    fun saveToken(context: Context, token: String, userId: String) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit {
+                putString(KEY_TOKEN, token)
+                    .putString(KEY_USER_ID, userId)
+                    .putBoolean("logged_in", true)  // PlugBoxAppRoot reads this
+            }
+    }
+
+    // Called from PlugBoxHomeFlow for API calls
+    fun getUserId(context: Context): String? =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_USER_ID, null)
+
+    fun getToken(context: Context): String? =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_TOKEN, null)
+
+    fun isLoggedIn(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean("logged_in", false)
+
+    fun logout(context: Context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit { clear() }
     }
 }

@@ -133,8 +133,14 @@ fun PlugBoxScreen() {
                     scope.launch {
                         holdResult = "Working..."
                         try {
-                            val res = ApiClient.api.hold(HoldRequest(chargerId = selected!!.id, userId = userId))
-                            holdResult = "Hold OK ✅ bookingId=${res.booking.id}"
+                            val res = ApiClient.api.hold(HoldRequest(
+                                chargerId    = selected!!.id,
+                                userId       = userId,
+                                packageName  = "Standard",
+                                packagePaise = 4000,
+                                kwhLimit     = 1.0
+                            ))
+                            holdResult = "Hold OK bookingId=${res.bookingId}"
                         } catch (e: Exception) {
                             holdResult = "Hold ERROR: ${e.message}"
                         }
