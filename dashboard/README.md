@@ -1,73 +1,211 @@
-# React + TypeScript + Vite
+# PlugBox Admin Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A comprehensive EV charging management system with full-stack authentication and real-time dashboard analytics.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Authentication & Authorization**: JWT-based auth with role-based access control
+- **Real-time Dashboard**: Live statistics for users, vendors, chargers, and sessions
+- **Revenue Analytics**: Interactive charts for revenue trends and session data
+- **Charger Management**: Monitor charger status and performance
+- **Vendor Management**: Complete vendor lifecycle management
+- **Session Tracking**: Real-time charging session monitoring
+- **Payment Processing**: Integrated payment and payout systems
+- **Responsive Design**: Modern UI built with Tailwind CSS
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Backend
+- Node.js & Express.js
+- MongoDB with Mongoose ODM
+- JWT Authentication
+- bcryptjs for password hashing
+- Express Validator for input validation
+- Helmet & Rate Limiting for security
 
-## Expanding the ESLint configuration
+### Frontend
+- React 18 with React Router
+- Tailwind CSS for styling
+- Recharts for data visualization
+- Lucide React for icons
+- Axios for API communication
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Project Structure
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+dashboard/
+├── Backend/
+│   ├── config/
+│   │   └── db.js              # Database configuration
+│   ├── middleware/
+│   │   └── auth.js             # Authentication middleware
+│   ├── models/
+│   │   ├── User.js             # User model
+│   │   ├── Vendor.js           # Vendor model
+│   │   ├── Charger.js          # Charger model
+│   │   └── Session.js          # Session model
+│   ├── routes/
+│   │   ├── auth.js             # Authentication routes
+│   │   ├── dashboard.js        # Dashboard data routes
+│   │   └── ...                 # Other module routes
+│   ├── package.json
+│   └── server.js               # Main server file
+└── Frontend/
+    ├── public/
+    ├── src/
+    │   ├── components/
+    │   │   ├── Sidebar.js
+    │   │   ├── Header.js
+    │   │   ├── StatCard.js
+    │   │   ├── ChargerStatus.js
+    │   │   ├── RevenueChart.js
+    │   │   └── SessionsChart.js
+    │   ├── contexts/
+    │   │   └── AuthContext.js
+    │   ├── pages/
+    │   │   ├── Login.js
+    │   │   ├── Dashboard.js
+    │   │   └── ...              # Other pages
+    │   ├── App.js
+    │   ├── index.js
+    │   └── index.css
+    ├── package.json
+    ├── tailwind.config.js
+    └── postcss.config.js
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Setup Instructions
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Prerequisites
+- Node.js (v16 or higher)
+- MongoDB (local or Atlas)
+- npm or yarn
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Backend Setup
+
+1. Navigate to the backend directory:
+```bash
+cd Backend
 ```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Create a `.env` file with the following variables:
+```env
+NODE_ENV=development
+PORT=5000
+MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/plugbox?retryWrites=true&w=majority
+JWT_SECRET=your_super_secret_jwt_key_here_change_in_production
+JWT_EXPIRE=7d
+```
+
+4. Start the backend server:
+```bash
+npm run dev
+```
+
+### Frontend Setup
+
+1. Navigate to the frontend directory:
+```bash
+cd Frontend
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Start the frontend development server:
+```bash
+npm start
+```
+
+## Default Admin Account
+
+To create an admin account, you can register through the login page or use the API directly:
+
+```bash
+POST /api/auth/register
+{
+  "name": "Admin User",
+  "email": "admin@plugbox.com",
+  "password": "admin123",
+  "phoneNumber": "+1234567890",
+  "role": "admin"
+}
+```
+
+## API Endpoints
+
+### Authentication
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - Login user
+- `GET /api/auth/me` - Get current user
+- `PUT /api/auth/profile` - Update profile
+- `POST /api/auth/logout` - Logout user
+
+### Dashboard
+- `GET /api/dashboard/stats` - Get dashboard statistics
+- `GET /api/dashboard/revenue-trend` - Get revenue trend data
+- `GET /api/dashboard/sessions-over-time` - Get sessions over time
+- `GET /api/dashboard/recent-activities` - Get recent activities
+- `GET /api/dashboard/top-vendors` - Get top performing vendors
+
+## Features Implementation
+
+### Authentication System
+- JWT-based authentication with secure token storage
+- Role-based access control (user, admin, super_admin)
+- Password hashing with bcryptjs
+- Protected routes with middleware
+
+### Dashboard Analytics
+- Real-time statistics for all key metrics
+- Interactive charts using Recharts
+- Responsive grid layout
+- Color-coded status indicators
+
+### Charger Status Monitoring
+- Live status tracking (Available, In Session, Offline, Reserved, Maintenance)
+- Performance metrics and uptime tracking
+- Location-based charger management
+
+## Security Features
+
+- Input validation with express-validator
+- Rate limiting to prevent abuse
+- CORS configuration
+- Helmet for security headers
+- Password hashing and JWT tokens
+
+## Deployment
+
+### Backend Deployment
+1. Set production environment variables
+2. Build and deploy to your preferred hosting platform
+3. Ensure MongoDB connection string is properly configured
+
+### Frontend Deployment
+1. Build the React app: `npm run build`
+2. Deploy the build folder to your hosting service
+3. Configure environment variables for production
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.
+
+## Support
+
+For support and questions, please contact the development team.
