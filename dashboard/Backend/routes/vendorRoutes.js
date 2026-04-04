@@ -6,24 +6,36 @@ const {
   getVendors,
   getVendorById,
   updateVendor,
-  deleteVendor
+  deleteVendor,
+  getVendorDashboard,
+  getVendorProfile,
+  updateVendorProfile,
+  getVendorEarnings,
+  updateVendorStatus,
+  getVendorStats
 } = require("../controllers/vendorController");
 
 const authMiddleware = require("../middleware/authMiddleware");
 
-// Create Vendor
+// Basic CRUD Operations
 router.post("/", authMiddleware, createVendor);
-
-// Get All Vendors
 router.get("/", authMiddleware, getVendors);
-
-// Get Vendor By ID
+router.get("/stats", authMiddleware, getVendorStats);
 router.get("/:id", authMiddleware, getVendorById);
-
-// Update Vendor
 router.put("/:id", authMiddleware, updateVendor);
-
-// Delete Vendor
 router.delete("/:id", authMiddleware, deleteVendor);
+
+// Vendor Dashboard
+router.get("/:id/dashboard", authMiddleware, getVendorDashboard);
+
+// Vendor Profile Management
+router.get("/:id/profile", authMiddleware, getVendorProfile);
+router.put("/:id/profile", authMiddleware, updateVendorProfile);
+
+// Vendor Earnings
+router.get("/:id/earnings", authMiddleware, getVendorEarnings);
+
+// Vendor Status Management
+router.put("/:id/status", authMiddleware, updateVendorStatus);
 
 module.exports = router;

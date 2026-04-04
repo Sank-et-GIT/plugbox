@@ -57,6 +57,27 @@ const userSchema = new mongoose.Schema({
   lastLogin: {
     type: Date,
     default: Date.now
+  },
+
+  // Vendor specific fields
+  businessDetails: {
+    companyName: { type: String, trim: true },
+    shopAddress: {
+      address: { type: String, trim: true },
+      city: { type: String, trim: true },
+      state: { type: String, trim: true },
+      pincode: { type: String, trim: true }
+    },
+    gstNumber: { type: String, trim: true, uppercase: true },
+    panNumber: { type: String, trim: true, uppercase: true }
+  },
+
+  bankDetails: {
+    accountNumber: { type: String, trim: true },
+    accountHolderName: { type: String, trim: true },
+    bankName: { type: String, trim: true },
+    ifscCode: { type: String, trim: true, uppercase: true },
+    branchName: { type: String, trim: true }
   }
 }, {
   timestamps: true

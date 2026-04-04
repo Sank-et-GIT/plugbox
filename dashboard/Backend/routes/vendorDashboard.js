@@ -10,70 +10,89 @@ router.get('/stats', authMiddleware, vendorMiddleware, async (req, res) => {
     const vendorId = req.user._id;
 
     // Get total chargers
-    const totalChargers = await Charger.countDocuments({ 
-      vendorId, 
-      isActive: true 
-    });
+    const totalChargers = await Charger.countDocuments({ vendorId });
 
     // Get charger status breakdown
     const chargerStats = await Charger.aggregate([
-      { $match: { vendorId, isActive: true } },
-      { $group: { _id: '$status', count: { $sum: 1 } } }
-    ]);
-
-    // Get total sessions
-    const totalSessions = await Session.countDocuments({ 
-      vendorId 
-    });
-
-    // Get session status breakdown
-    const sessionStats = await Session.aggregate([
       { $match: { vendorId } },
       { $group: { _id: '$status', count: { $sum: 1 } } }
     ]);
 
-    // Calculate total earnings (sum of all paid sessions)
-    const totalEarnings = await Session.aggregate([
-      { $match: { vendorId, paymentStatus: 'paid' } },
-      { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+    const chargerStatusMap = {};
+    chargerStats.forEach(stat => {
+      chargerStatusMap[stat._id] = stat.count;
+    });
+
+    // Get active sessions count
+    const activeSessions = await Session.countDocuments({ 
+      vendorId, 
+      status: 'active' 
+    });
+
+    // Get session statistics
+    const sessionStats = await Session.aggregate([
+      { $match: { vendorId } },
+      {
+        $group: {
+          _id: null,
+          totalSessions: { $sum: 1 },
+          totalEarnings: { $sum: '$totalAmount' },
+          totalUnitsDelivered: { $sum: '$unitsConsumed' },
+          completedSessions: {
+            $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
+          }
+        }
+      }
     ]);
 
-    // Get recent sessions
-    const recentSessions = await Session.find({ vendorId })
-      .populate('userId', 'name email')
-      .populate('chargerId', 'chargerName location')
-      .sort({ startTime: -1 })
-      .limit(10);
-
-    // Get today's earnings
+    // Get today's statistics
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const todayEarnings = await Session.aggregate([
+    const todayStats = await Session.aggregate([
       { 
         $match: { 
-          vendorId, 
-          paymentStatus: 'paid',
-          startTime: { $gte: today, $lt: tomorrow }
-        } 
-      },
-      { $group: { _id: null, total: { $sum: '$totalAmount' } } }
-    ]);
-
-    // Get monthly earnings trend (last 6 months)
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
-    const monthlyEarnings = await Session.aggregate([
-      {
-        $match: {
           vendorId,
-          paymentStatus: 'paid',
-          startTime: { $gte: sixMonthsAgo }
+          startTime: { $gte: today, $lt: tomorrow }
         }
       },
+      {
+        $group: {
+          _id: null,
+          todayEarnings: { $sum: '$totalAmount' },
+          todayUnits: { $sum: '$unitsConsumed' },
+          todaySessions: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Get recent sessions
+    const recentSessions = await Session.find({ vendorId })
+      .populate('chargerId', 'chargerName location.address')
+      .populate('userId', 'name email')
+      .sort({ startTime: -1 })
+      .limit(5);
+
+    // Calculate average session duration
+    const avgDurationStats = await Session.aggregate([
+      { $match: { vendorId, status: 'completed', duration: { $gt: 0 } } },
+      {
+        $group: {
+          _id: null,
+          avgDuration: { $avg: '$duration' }
+        }
+      }
+    ]);
+
+    const stats = sessionStats[0] || { totalSessions: 0, totalEarnings: 0, totalUnitsDelivered: 0, completedSessions: 0 };
+    const todayData = todayStats[0] || { todayEarnings: 0, todayUnits: 0, todaySessions: 0 };
+    const avgDuration = avgDurationStats[0]?.avgDuration || 0;
+
+    // Get monthly earnings for the last 6 months
+    const monthlyEarnings = await Session.aggregate([
+      { $match: { vendorId, status: 'completed' } },
       {
         $group: {
           _id: {
@@ -81,209 +100,47 @@ router.get('/stats', authMiddleware, vendorMiddleware, async (req, res) => {
             month: { $month: '$startTime' }
           },
           earnings: { $sum: '$totalAmount' },
-          sessions: { $sum: 1 }
+          sessions: { $sum: 1 },
+          units: { $sum: '$unitsConsumed' }
         }
       },
-      { $sort: { '_id.year': 1, '_id.month': 1 } }
+      { $sort: { '_id.year': -1, '_id.month': -1 } },
+      { $limit: 6 }
     ]);
 
     res.json({
       success: true,
       data: {
-        totalChargers,
-        chargerStats: chargerStats.reduce((acc, stat) => {
-          acc[stat._id] = stat.count;
-          return acc;
-        }, {}),
-        totalSessions,
-        sessionStats: sessionStats.reduce((acc, stat) => {
-          acc[stat._id] = stat.count;
-          return acc;
-        }, {}),
-        totalEarnings: totalEarnings[0]?.total || 0,
-        todayEarnings: todayEarnings[0]?.total || 0,
+        summary: {
+          totalChargers,
+          activeChargers: chargerStatusMap['Available'] || 0,
+          chargersInSession: chargerStatusMap['In_Session'] || 0,
+          offlineChargers: chargerStatusMap['Offline'] || 0,
+          reservedChargers: chargerStatusMap['Reserved'] || 0,
+          maintenanceChargers: chargerStatusMap['On_Maintenance'] || 0,
+          activeSessions,
+          totalSessions: stats.totalSessions,
+          completedSessions: stats.completedSessions,
+          totalEarnings: stats.totalEarnings,
+          todayEarnings: todayData.todayEarnings,
+          totalUnitsDelivered: stats.totalUnitsDelivered,
+          todayUnits: todayData.todayUnits,
+          avgSessionDuration: Math.round(avgDuration)
+        },
         recentSessions,
         monthlyEarnings: monthlyEarnings.map(item => ({
-          month: `${item._id.year}-${String(item._id.month).padStart(2, '0')}`,
-          earnings: item.earnings,
-          sessions: item.sessions
-        }))
-      }
-    });
-  } catch (error) {
-    console.error('Vendor dashboard stats error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error fetching vendor dashboard statistics' 
-    });
-  }
-});
-
-// Get vendor's chargers
-router.get('/chargers', authMiddleware, vendorMiddleware, async (req, res) => {
-  try {
-    const { page = 1, limit = 10, status, search } = req.query;
-    const vendorId = req.user._id;
-
-    // Build query
-    const query = { vendorId, isActive: true };
-    
-    if (status) {
-      query.status = status;
-    }
-
-    if (search) {
-      query.$or = [
-        { chargerName: { $regex: search, $options: 'i' } },
-        { chargerId: { $regex: search, $options: 'i' } },
-        { 'location.address': { $regex: search, $options: 'i' } }
-      ];
-    }
-
-    const chargers = await Charger.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await Charger.countDocuments(query);
-
-    res.json({
-      success: true,
-      data: {
-        chargers,
-        pagination: {
-          current: parseInt(page),
-          pages: Math.ceil(total / limit),
-          total
-        }
-      }
-    });
-  } catch (error) {
-    console.error('Get vendor chargers error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error fetching chargers' 
-    });
-  }
-});
-
-// Get vendor's sessions
-router.get('/sessions', authMiddleware, vendorMiddleware, async (req, res) => {
-  try {
-    const { page = 1, limit = 10, status, startDate, endDate } = req.query;
-    const vendorId = req.user._id;
-
-    // Build query
-    const query = { vendorId };
-    
-    if (status) {
-      query.status = status;
-    }
-
-    if (startDate || endDate) {
-      query.startTime = {};
-      if (startDate) query.startTime.$gte = new Date(startDate);
-      if (endDate) query.startTime.$lte = new Date(endDate);
-    }
-
-    const sessions = await Session.find(query)
-      .populate('userId', 'name email')
-      .populate('chargerId', 'chargerName location')
-      .sort({ startTime: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await Session.countDocuments(query);
-
-    res.json({
-      success: true,
-      data: {
-        sessions,
-        pagination: {
-          current: parseInt(page),
-          pages: Math.ceil(total / limit),
-          total
-        }
-      }
-    });
-  } catch (error) {
-    console.error('Get vendor sessions error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error fetching sessions' 
-    });
-  }
-});
-
-// Get earnings report
-router.get('/earnings', authMiddleware, vendorMiddleware, async (req, res) => {
-  try {
-    const { period = 'month' } = req.query;
-    const vendorId = req.user._id;
-
-    let groupBy, dateFormat;
-    
-    switch (period) {
-      case 'day':
-        groupBy = {
-          year: { $year: '$startTime' },
-          month: { $month: '$startTime' },
-          day: { $dayOfMonth: '$startTime' }
-        };
-        dateFormat = '%Y-%m-%d';
-        break;
-      case 'week':
-        groupBy = {
-          year: { $year: '$startTime' },
-          week: { $week: '$startTime' }
-        };
-        dateFormat = '%Y-%U';
-        break;
-      case 'month':
-      default:
-        groupBy = {
-          year: { $year: '$startTime' },
-          month: { $month: '$startTime' }
-        };
-        dateFormat = '%Y-%m';
-        break;
-    }
-
-    const earnings = await Session.aggregate([
-      {
-        $match: {
-          vendorId,
-          paymentStatus: 'paid'
-        }
-      },
-      {
-        $group: {
-          _id: groupBy,
-          earnings: { $sum: '$totalAmount' },
-          sessions: { $sum: 1 },
-          unitsConsumed: { $sum: '$unitsConsumed' }
-        }
-      },
-      { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1, '_id.week': 1 } }
-    ]);
-
-    res.json({
-      success: true,
-      data: {
-        period,
-        earnings: earnings.map(item => ({
-          period: Object.values(item._id).join('-'),
+          month: new Date(item._id.year, item._id.month - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
           earnings: item.earnings,
           sessions: item.sessions,
-          unitsConsumed: item.unitsConsumed
-        }))
+          units: item.units
+        })).reverse()
       }
     });
   } catch (error) {
-    console.error('Get earnings error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error fetching earnings report' 
+    console.error('Error fetching vendor dashboard stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching dashboard statistics'
     });
   }
 });

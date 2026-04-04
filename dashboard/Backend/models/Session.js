@@ -83,6 +83,12 @@ const sessionSchema = new mongoose.Schema({
   notes: {
     type: String,
     trim: true
+  },
+
+  endReason: {
+    type: String,
+    enum: ['User_Stopped', 'Fully_Charged', 'Error'],
+    default: null
   }
 }, {
   timestamps: true

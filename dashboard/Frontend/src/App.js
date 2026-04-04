@@ -10,6 +10,9 @@ import Header from './components/Header';
 import VendorRoute from './components/VendorRoute';
 import Vendors from './pages/Vendors';
 import Chargers from './pages/Chargers';
+import ChargerList from './pages/ChargerList';
+import AddCharger from './pages/AddCharger';
+import EditCharger from './pages/EditCharger';
 import Users from './pages/Users';
 import Sessions from './pages/Sessions';
 import Payments from './pages/Payments';
@@ -92,6 +95,11 @@ function App() {
             <Route path="/" element={
               <ProtectedRoute>
                 <RoleBasedRedirect />
+              </ProtectedRoute>
+            } />
+            <Route path="/chargers" element={
+              <ProtectedRoute>
+                <Navigate to="/vendor/chargers" replace />
               </ProtectedRoute>
             } />
             {/* Vendor Dashboard */}

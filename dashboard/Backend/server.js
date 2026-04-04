@@ -23,54 +23,76 @@ const reportRoutes = require("./routes/reportRoutes");
 
 const app = express();
 
-app.set('trust proxy', 1);
-
-connectDB();
-
+// Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: 'Too many requests from this IP, please try again later.'
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: {
+    error: 'Too many requests from this IP, please try again later.'
+  }
 });
 
+// Connect to database
+connectDB();
+
+// Middleware
 app.use(helmet());
 app.use(limiter);
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://yourdomain.com'] 
-    : ['http://localhost:3000'],
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-app.get('/', (req, res) => {
-  res.json({ message: 'PlugBox Dashboard API is running...' });
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    message: 'PlugBox Dashboard API is running...',
+    timestamp: new Date().toISOString()
+  });
 });
 
-app.use("/api/auth", authRoutes);
-app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/debug", debugRoutes);
-app.use("/api/vendor/dashboard", vendorDashboardRoutes);
-app.use("/api/vendor/chargers", vendorChargerRoutes);
-app.use("/api/vendor/sessions", vendorSessionRoutes);
-app.use("/api/admin", adminRoutes);
-app.use("/api/vendors", vendorRoutes);
-app.use("/api/chargers", chargerRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/sessions", sessionRoutes);
-app.use("/api/payments", paymentRoutes);
-app.use("/api/payouts", payoutRoutes);
-app.use("/api/reports", reportRoutes);
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/vendor/dashboard', vendorDashboardRoutes);
+app.use('/api/vendor/chargers', vendorChargerRoutes);
+app.use('/api/vendor/sessions', vendorSessionRoutes);
+app.use('/api/vendor', vendorRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/chargers', chargerRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/sessions', sessionRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/payouts', payoutRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/debug', debugRoutes);
 
+// Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ message: 'Something went wrong!' });
+  res.status(500).json({
+    success: false,
+    message: 'Something went wrong!',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'API endpoint not found'
+  });
 });
 
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log("All modules are successfully working");
+  console.log('All modules are successfully working');
 });
+
+module.exports = app;
