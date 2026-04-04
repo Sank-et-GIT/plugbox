@@ -5,8 +5,8 @@ import { Zap, Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
   const [formData, setFormData] = useState({
-    email: '',
-    password: ''
+    email: 'testvendor@plugbox.com',
+    password: 'password123'
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -49,10 +49,13 @@ const Login = () => {
             </div>
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Admin Login
+            Vendor Login
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Sign in to your admin account
+            Sign in to your account
+          </p>
+          <p className="mt-2 text-center text-xs text-gray-500">
+            Test Credentials: testvendor@plugbox.com / password123
           </p>
         </div>
         

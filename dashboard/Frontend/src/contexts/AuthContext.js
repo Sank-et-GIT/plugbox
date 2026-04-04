@@ -17,18 +17,20 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token) {
+    if (token && !user) { // Only fetch user if we don't already have one
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       fetchUser();
-    } else {
+    } else if (!token) {
       setLoading(false);
+    } else {
+      setLoading(false); // We have token and user, so stop loading
     }
-  }, []);
+  }, [user]);
 
   const fetchUser = async () => {
     try {
-      const response = await axios.get('/api/auth/me');
-      setUser(response.data.user);
+      const response = await axios.get('/api/vendor/auth/me');
+      setUser(response.data.vendor);
     } catch (error) {
       console.error('Failed to fetch user:', error);
       localStorage.removeItem('token');
@@ -40,12 +42,13 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post('/api/auth/login', { email, password });
-      const { token, user } = response.data;
+      const response = await axios.post('/api/vendor/auth/login', { email, password });
+      const { token, vendor } = response.data;
       
       localStorage.setItem('token', token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(user);
+      setUser(vendor);
+      setLoading(false); // Set loading to false after successful login
       
       return { success: true };
     } catch (error) {
@@ -56,7 +59,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (userData) => {
     try {
-      const response = await axios.post('/api/auth/register', userData);
+      await axios.post('/api/vendor/auth/register', userData);
       
       // Don't automatically log in after registration
       // Just return success message
@@ -81,7 +84,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await axios.post('/api/auth/logout');
+      await axios.post('/api/vendor/auth/logout');
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -93,8 +96,8 @@ export const AuthProvider = ({ children }) => {
 
   const updateProfile = async (profileData) => {
     try {
-      const response = await axios.put('/api/auth/profile', profileData);
-      setUser(response.data.user);
+      const response = await axios.put('/api/vendor/auth/profile', profileData);
+      setUser(response.data.vendor);
       return { success: true };
     } catch (error) {
       const message = error.response?.data?.message || 'Profile update failed';

@@ -4,8 +4,14 @@ import { useAuth } from '../contexts/AuthContext';
 const VendorRoute = ({ children }) => {
   const { user } = useAuth();
   
-  if (!['vendor'].includes(user?.role)) {
+  // Check if user is authenticated and has vendor role
+  if (!user) {
     return <Navigate to="/login" replace />;
+  }
+  
+  if (user.role !== 'vendor') {
+    // If not a vendor, redirect to admin dashboard
+    return <Navigate to="/admin/dashboard" replace />;
   }
   
   return children;

@@ -7,10 +7,12 @@ const rateLimit = require("express-rate-limit");
 
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/simple-auth");
+const vendorAuthRoutes = require("./routes/vendorAuth");
+const adminRoutes = require("./routes/adminRoutes");
 const dashboardRoutes = require("./routes/dashboard");
 const debugRoutes = require("./routes/debug");
-// const vendorDashboardRoutes = require("./routes/vendorDashboard");
-// const vendorChargerRoutes = require("./routes/vendorChargers");
+const vendorDashboardRoutes = require("./routes/vendorDashboardPrisma");
+const vendorChargerRoutes = require("./routes/vendorChargersPrisma");
 // const vendorSessionRoutes = require("./routes/vendorSessions");
 // const adminRoutes = require("./routes/adminRoutes");
 // const vendorRoutes = require("./routes/vendorRoutes");
@@ -39,7 +41,7 @@ connectDB();
 app.use(helmet());
 app.use(limiter);
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: ['http://localhost:3000', 'http://localhost:3002'],
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -56,9 +58,11 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/vendor/auth', vendorAuthRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-// app.use('/api/vendor/dashboard', vendorDashboardRoutes);
-// app.use('/api/vendor/chargers', vendorChargerRoutes);
+app.use('/api/vendor/dashboard', vendorDashboardRoutes);
+app.use('/api/vendor/chargers', vendorChargerRoutes);
 // app.use('/api/vendor/sessions', vendorSessionRoutes);
 // app.use('/api/vendor', vendorRoutes);
 // app.use('/api/admin', adminRoutes);

@@ -104,7 +104,7 @@ const Sidebar = () => {
           {!collapsed && (
             <div className="ml-3">
               <p className="text-sm font-medium text-gray-900 truncate">
-                {user?.name}
+                {user?.name || user?.companyName || user?.email}
               </p>
               <p className="text-xs text-gray-500 capitalize">
                 {user?.role}

@@ -36,9 +36,19 @@ const ChargerList = () => {
       if (searchTerm) params.search = searchTerm;
       if (statusFilter !== 'all') params.status = statusFilter;
 
-      const response = await axios.get('/api/chargers', { params });
-      setChargers(response.data.chargers);
-      setTotalPages(response.data.pagination.pages);
+      // Use different API endpoints based on user role
+      const endpoint = isAdmin ? '/api/chargers' : '/api/vendor/chargers';
+      const response = await axios.get(endpoint, { params });
+      
+      // Handle different response formats
+      if (isAdmin) {
+        setChargers(response.data.chargers);
+        setTotalPages(response.data.pagination.pages);
+      } else {
+        setChargers(response.data.data);
+        // Vendor API doesn't have pagination yet, set to 1 for now
+        setTotalPages(1);
+      }
     } catch (err) {
       setError('Failed to load chargers');
       console.error('Error fetching chargers:', err);
@@ -49,8 +59,16 @@ const ChargerList = () => {
 
   const fetchChargerStats = async () => {
     try {
-      const response = await axios.get('/api/chargers/stats');
-      setStats(response.data.stats);
+      // Use different API endpoints based on user role
+      const endpoint = isAdmin ? '/api/chargers/stats' : '/api/vendor/chargers/stats';
+      const response = await axios.get(endpoint);
+      
+      // Handle different response formats
+      if (isAdmin) {
+        setStats(response.data.stats);
+      } else {
+        setStats(response.data.data);
+      }
     } catch (err) {
       console.error('Error fetching charger stats:', err);
     }
@@ -76,7 +94,9 @@ const ChargerList = () => {
 
   const handleStatusChange = async (chargerId, newStatus) => {
     try {
-      await axios.patch(`/api/chargers/${chargerId}/status`, { status: newStatus });
+      // Use different API endpoints based on user role
+      const endpoint = isAdmin ? `/api/chargers/${chargerId}/status` : `/api/vendor/chargers/${chargerId}/status`;
+      await axios.patch(endpoint, { status: newStatus });
       fetchChargers();
       fetchChargerStats();
     } catch (err) {
@@ -319,15 +339,15 @@ const ChargerList = () => {
                 </tr>
               ) : chargers.length > 0 ? (
                 chargers.map((charger) => (
-                  <tr key={charger._id} className="hover:bg-gray-50">
+                  <tr key={charger.id || charger._id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-3">
                         <div className="bg-gray-200 rounded-full h-10 w-10 flex items-center justify-center">
                           {getStatusIcon(charger.status)}
                         </div>
                         <div>
-                          <p className="font-medium text-gray-900">{charger.chargerName}</p>
-                          <p className="text-sm text-gray-600">ID: {charger.chargerId}</p>
+                          <p className="font-medium text-gray-900">{charger.name || charger.chargerName}</p>
+                          <p className="text-sm text-gray-600">ID: {charger.displayName || charger.chargerId}</p>
                         </div>
                       </div>
                     </td>
@@ -338,21 +358,23 @@ const ChargerList = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="space-y-1">
-                        <p className="text-sm text-gray-900">{charger.chargerType}</p>
-                        <p className="text-xs text-gray-600">{charger.connectorType}</p>
+                        <p className="text-sm text-gray-900">{charger.chargerType || 'Standard'}</p>
+                        <p className="text-xs text-gray-600">{charger.connectorType || 'Type 2'}</p>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="font-medium text-gray-900">{formatCurrency(charger.pricePerUnit)}</p>
+                      <p className="font-medium text-gray-900">{formatCurrency(charger.pricePerUnit || 0)}</p>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-1 text-sm text-gray-600">
                         <MapPin className="h-4 w-4 text-gray-400" />
-                        <span className="truncate max-w-xs">{charger.location.address}</span>
+                        <span className="truncate max-w-xs">
+                          {charger.location?.address || 'No location set'}
+                        </span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-sm text-gray-900">{charger.totalSessions || 0}</p>
+                      <p className="text-sm text-gray-900">{charger.totalSessions || charger.activeSessions || 0}</p>
                     </td>
                     <td className="px-6 py-4">
                       <p className="font-medium text-gray-900">{formatCurrency(charger.totalRevenue || 0)}</p>

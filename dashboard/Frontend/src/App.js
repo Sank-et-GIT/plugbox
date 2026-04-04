@@ -8,6 +8,9 @@ import Dashboard from './pages/Dashboard';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import VendorRoute from './components/VendorRoute';
+import AdminVendors from './pages/AdminVendors';
+import AdminChargers from './pages/AdminChargers';
+import AdminUsers from './pages/AdminUsers';
 import Vendors from './pages/Vendors';
 import Chargers from './pages/Chargers';
 import ChargerList from './pages/ChargerList';
@@ -44,7 +47,15 @@ function ProtectedRoute({ children }) {
 function AdminRoute({ children }) {
   const { user } = useAuth();
   
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  
   if (!['admin', 'super_admin'].includes(user?.role)) {
+    // If user is a vendor, redirect to vendor chargers
+    if (user?.role === 'vendor') {
+      return <Navigate to="/vendor/chargers" replace />;
+    }
     return <Navigate to="/" replace />;
   }
   
@@ -71,17 +82,16 @@ function RoleBasedRedirect() {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  
-  // Redirect based on role
-  switch (user.role) {
-    case 'admin':
-    case 'super_admin':
-      return <Navigate to="/admin/dashboard" replace />; // Admin dashboard
-    case 'vendor':
-      return <Navigate to="/vendor/chargers" replace />; // Vendor chargers
-    default:
-      return <Navigate to="/login" replace />;
+
+  // Redirect based on user role
+  if (user.role === 'vendor') {
+    return <Navigate to="/vendor/chargers" replace />;
+  } else if (['admin', 'super_admin'].includes(user.role)) {
+    return <Navigate to="/admin/dashboard" replace />;
   }
+  
+  // Default fallback
+  return <Navigate to="/login" replace />;
 }
 
 function App() {
@@ -102,7 +112,7 @@ function App() {
               <ProtectedRoute>
                 <AdminRoute>
                   <Layout>
-                    <ChargerList />
+                    <Dashboard />
                   </Layout>
                 </AdminRoute>
               </ProtectedRoute>
@@ -136,6 +146,33 @@ function App() {
               </ProtectedRoute>
             } />
             {/* Admin-only routes */}
+            <Route path="/admin/vendors" element={
+              <ProtectedRoute>
+                <AdminRoute>
+                  <Layout>
+                    <AdminVendors />
+                  </Layout>
+                </AdminRoute>
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/chargers" element={
+              <ProtectedRoute>
+                <AdminRoute>
+                  <Layout>
+                    <AdminChargers />
+                  </Layout>
+                </AdminRoute>
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/users" element={
+              <ProtectedRoute>
+                <AdminRoute>
+                  <Layout>
+                    <AdminUsers />
+                  </Layout>
+                </AdminRoute>
+              </ProtectedRoute>
+            } />
             <Route path="/vendors" element={
               <ProtectedRoute>
                 <AdminRoute>

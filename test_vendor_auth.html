@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Vendor Authentication Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+    <h1>Vendor Authentication Test</h1>
+    <button onclick="testVendorLogin()">Test Vendor Login</button>
+    <button onclick="testVendorProfile()">Test Vendor Profile</button>
+    <div id="result"></div>
+
+    <script>
+        async function testVendorLogin() {
+            try {
+                const response = await axios.post('http://localhost:5001/api/vendor/auth/login', {
+                    email: 'testvendor@plugbox.com',
+                    password: 'password123'
+                });
+                
+                document.getElementById('result').innerHTML = `
+                    <h3>Login Response:</h3>
+                    <pre>${JSON.stringify(response.data, null, 2)}</pre>
+                `;
+                
+                // Store token for profile test
+                localStorage.setItem('vendorToken', response.data.token);
+            } catch (error) {
+                document.getElementById('result').innerHTML = `
+                    <h3>Login Error:</h3>
+                    <pre>${error.response?.data || error.message}</pre>
+                `;
+            }
+        }
+        
+        async function testVendorProfile() {
+            try {
+                const token = localStorage.getItem('vendorToken');
+                if (!token) {
+                    document.getElementById('result').innerHTML = '<p>Please login first</p>';
+                    return;
+                }
+                
+                const response = await axios.get('http://localhost:5001/api/vendor/auth/me', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                document.getElementById('result').innerHTML = `
+                    <h3>Profile Response:</h3>
+                    <pre>${JSON.stringify(response.data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                document.getElementById('result').innerHTML = `
+                    <h3>Profile Error:</h3>
+                    <pre>${error.response?.data || error.message}</pre>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
