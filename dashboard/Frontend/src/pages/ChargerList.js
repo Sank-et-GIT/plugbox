@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Filter, Edit, Trash2, MapPin, Zap, DollarSign, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import axios from 'axios';
+import { useAuth } from '../contexts/AuthContext';
 
 const ChargerList = () => {
+  const { user } = useAuth();
   const [chargers, setChargers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -14,6 +16,9 @@ const ChargerList = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedCharger, setSelectedCharger] = useState(null);
+
+  // Check if user is admin
+  const isAdmin = ['admin', 'super_admin'].includes(user?.role);
 
   useEffect(() => {
     fetchChargers();
@@ -177,13 +182,15 @@ const ChargerList = () => {
           <h1 className="text-3xl font-bold text-gray-900">Charger Management</h1>
           <p className="text-gray-600 mt-1">Manage your EV charging stations</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          <Plus className="h-5 w-5" />
-          <span>Add Charger</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <Plus className="h-5 w-5" />
+            <span>Add Charger</span>
+          </button>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -296,15 +303,17 @@ const ChargerList = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Revenue
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
+                {isAdmin && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-4 text-center">
+                  <td colSpan={isAdmin ? "8" : "7"} className="px-6 py-4 text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                   </td>
                 </tr>
@@ -348,28 +357,29 @@ const ChargerList = () => {
                     <td className="px-6 py-4">
                       <p className="font-medium text-gray-900">{formatCurrency(charger.totalRevenue || 0)}</p>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleEditCharger(charger)}
-                          className="text-blue-600 hover:text-blue-700"
-                          title="Edit Charger"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCharger(charger._id)}
-                          className="text-red-600 hover:text-red-700"
-                          title="Delete Charger"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                        <div className="relative">
-                          <button className="text-gray-600 hover:text-gray-700">
-                            <MoreVertical className="h-4 w-4" />
+                    {isAdmin && (
+                      <td className="px-6 py-4">
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleEditCharger(charger)}
+                            className="text-blue-600 hover:text-blue-700"
+                            title="Edit Charger"
+                          >
+                            <Edit className="h-4 w-4" />
                           </button>
-                          {/* Dropdown menu for status change */}
-                          <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 hidden">
+                          <button
+                            onClick={() => handleDeleteCharger(charger._id)}
+                            className="text-red-600 hover:text-red-700"
+                            title="Delete Charger"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                          <div className="relative">
+                            <button className="text-gray-600 hover:text-gray-700">
+                              <MoreVertical className="h-4 w-4" />
+                            </button>
+                            {/* Dropdown menu for status change */}
+                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 hidden">
                             <div className="py-1">
                               {['Available', 'Offline', 'On_Maintenance'].map((status) => (
                                 <button
@@ -385,11 +395,12 @@ const ChargerList = () => {
                         </div>
                       </div>
                     </td>
+                    )}
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="8" className="px-6 py-4 text-center text-gray-600">
+                  <td colSpan={isAdmin ? "8" : "7"} className="px-6 py-4 text-center text-gray-600">
                     {error || 'No chargers found'}
                   </td>
                 </tr>

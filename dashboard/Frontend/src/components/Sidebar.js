@@ -26,31 +26,25 @@ const Sidebar = () => {
   const isAdmin = ['admin', 'super_admin'].includes(user?.role);
 
   const vendorMenuItems = [
-    { path: '/', icon: Home, label: 'Dashboard' },
-    { path: '/chargers', icon: Zap, label: 'My Chargers' },
-    { path: '/sessions', icon: Calendar, label: 'Sessions' },
-    { path: '/earnings', icon: DollarSign, label: 'Earnings' },
-    { path: '/profile', icon: User, label: 'Profile' },
+    { path: '/vendor/chargers', icon: Zap, label: 'My Chargers' },
+    { path: '/vendor/earnings', icon: DollarSign, label: 'Earnings' },
+    { path: '/vendor/profile', icon: User, label: 'Profile' },
   ];
 
   const adminMenuItems = [
-    { path: '/', icon: Home, label: 'Dashboard' },
-    { path: '/vendors', icon: Users, label: 'Vendors' },
+    { path: '/admin/dashboard', icon: Home, label: 'Dashboard' },
     { path: '/chargers', icon: Zap, label: 'Chargers' },
+    { path: '/vendors', icon: Users, label: 'Vendors' },
     { path: '/users', icon: User, label: 'Users' },
     { path: '/sessions', icon: Calendar, label: 'Sessions' },
     { path: '/payments', icon: CreditCard, label: 'Payments' },
-    { path: '/payouts', icon: DollarSign, label: 'Payouts' },
+    { path: '/payouts', icon: TrendingUp, label: 'Payouts' },
     { path: '/reports', icon: FileText, label: 'Reports' },
-  ];
-
-  const commonMenuItems = [
     { path: '/notifications', icon: Bell, label: 'Notifications' },
     { path: '/settings', icon: Settings, label: 'Settings' },
   ];
 
   const menuItems = isVendor ? vendorMenuItems : adminMenuItems;
-  const allMenuItems = [...menuItems, ...commonMenuItems];
 
   return (
     <div className={`${collapsed ? 'w-16' : 'w-64'} bg-white shadow-lg transition-all duration-300 ease-in-out`}>
@@ -78,7 +72,7 @@ const Sidebar = () => {
           )}
         </div>
         <ul className="space-y-1">
-          {allMenuItems.map((item) => {
+          {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
             

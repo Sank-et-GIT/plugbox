@@ -76,11 +76,11 @@ function RoleBasedRedirect() {
   switch (user.role) {
     case 'admin':
     case 'super_admin':
-      return <Navigate to="/" replace />; // Admin dashboard
+      return <Navigate to="/admin/dashboard" replace />; // Admin dashboard
     case 'vendor':
-      return <Navigate to="/vendor/dashboard" replace />; // Vendor dashboard
+      return <Navigate to="/vendor/chargers" replace />; // Vendor chargers
     default:
-      return <Navigate to="/" replace />;
+      return <Navigate to="/login" replace />;
   }
 }
 
@@ -97,35 +97,22 @@ function App() {
                 <RoleBasedRedirect />
               </ProtectedRoute>
             } />
-            <Route path="/chargers" element={
+            {/* Admin Dashboard */}
+            <Route path="/admin/dashboard" element={
               <ProtectedRoute>
-                <Navigate to="/vendor/chargers" replace />
-              </ProtectedRoute>
-            } />
-            {/* Vendor Dashboard */}
-            <Route path="/vendor/dashboard" element={
-              <ProtectedRoute>
-                <VendorRoute>
+                <AdminRoute>
                   <Layout>
-                    <Dashboard />
+                    <ChargerList />
                   </Layout>
-                </VendorRoute>
+                </AdminRoute>
               </ProtectedRoute>
             } />
+            {/* Vendor Dashboard - Only Chargers and Earnings */}
             <Route path="/vendor/chargers" element={
               <ProtectedRoute>
                 <VendorRoute>
                   <Layout>
-                    <Chargers />
-                  </Layout>
-                </VendorRoute>
-              </ProtectedRoute>
-            } />
-            <Route path="/vendor/sessions" element={
-              <ProtectedRoute>
-                <VendorRoute>
-                  <Layout>
-                    <Sessions />
+                    <ChargerList />
                   </Layout>
                 </VendorRoute>
               </ProtectedRoute>

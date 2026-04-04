@@ -6,20 +6,20 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 
 const connectDB = require("./config/db");
-const authRoutes = require("./routes/auth");
+const authRoutes = require("./routes/simple-auth");
 const dashboardRoutes = require("./routes/dashboard");
 const debugRoutes = require("./routes/debug");
-const vendorDashboardRoutes = require("./routes/vendorDashboard");
-const vendorChargerRoutes = require("./routes/vendorChargers");
-const vendorSessionRoutes = require("./routes/vendorSessions");
-const adminRoutes = require("./routes/adminRoutes");
-const vendorRoutes = require("./routes/vendorRoutes");
+// const vendorDashboardRoutes = require("./routes/vendorDashboard");
+// const vendorChargerRoutes = require("./routes/vendorChargers");
+// const vendorSessionRoutes = require("./routes/vendorSessions");
+// const adminRoutes = require("./routes/adminRoutes");
+// const vendorRoutes = require("./routes/vendorRoutes");
 const chargerRoutes = require("./routes/chargerRoutes");
-const userRoutes = require("./routes/userRoutes");
-const sessionRoutes = require("./routes/sessionRoutes");
-const paymentRoutes = require("./routes/paymentRoutes");
-const payoutRoutes = require("./routes/payoutRoutes");
-const reportRoutes = require("./routes/reportRoutes");
+// const userRoutes = require("./routes/userRoutes");
+// const sessionRoutes = require("./routes/sessionRoutes");
+// const paymentRoutes = require("./routes/paymentRoutes");
+// const payoutRoutes = require("./routes/payoutRoutes");
+// const reportRoutes = require("./routes/reportRoutes");
 
 const app = express();
 
@@ -57,17 +57,17 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/vendor/dashboard', vendorDashboardRoutes);
-app.use('/api/vendor/chargers', vendorChargerRoutes);
-app.use('/api/vendor/sessions', vendorSessionRoutes);
-app.use('/api/vendor', vendorRoutes);
-app.use('/api/admin', adminRoutes);
+// app.use('/api/vendor/dashboard', vendorDashboardRoutes);
+// app.use('/api/vendor/chargers', vendorChargerRoutes);
+// app.use('/api/vendor/sessions', vendorSessionRoutes);
+// app.use('/api/vendor', vendorRoutes);
+// app.use('/api/admin', adminRoutes);
 app.use('/api/chargers', chargerRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/sessions', sessionRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/payouts', payoutRoutes);
-app.use('/api/reports', reportRoutes);
+// app.use('/api/users', userRoutes);
+// app.use('/api/sessions', sessionRoutes);
+// app.use('/api/payments', paymentRoutes);
+// app.use('/api/payouts', payoutRoutes);
+// app.use('/api/reports', reportRoutes);
 app.use('/api/debug', debugRoutes);
 
 // Error handling middleware

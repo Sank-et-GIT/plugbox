@@ -14,37 +14,12 @@ model User {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   firebaseUid String    @unique
-  email       String?   @unique
-  isActive    Boolean   @default(true)
-  lastLogin   DateTime?
-  role        String    @default("user")
   bookings    Booking[]
   sessions    Session[]
-  vendor      Vendor?
   wallet      Wallet?
 
   @@index([phone])
   @@index([firebaseUid])
-  @@index([email])
-}
-
-model Vendor {
-  id            String    @id @default(uuid())
-  userId        String    @unique
-  companyName   String?
-  email         String    @unique
-  phoneNumber   String
-  password      String
-  isActive      Boolean   @default(true)
-  kycStatus     String    @default("PENDING")
-  walletBalance Float     @default(0)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  lastLogin     DateTime?
-  chargers      Charger[]
-  user          User      @relation(fields: [userId], references: [id])
-
-  @@index([email])
 }
 
 model Wallet {
@@ -103,10 +78,8 @@ model Charger {
   locationId     Int?
   mqttTopic      String?
   slotNumber     Int             @default(1)
-  vendorId       String?
   bookings       Booking[]
   location       Location?       @relation(fields: [locationId], references: [id])
-  vendor         Vendor?         @relation(fields: [vendorId], references: [id])
   commands       DeviceCommand[]
   energyReadings EnergyReading[]
   sessions       Session[]
@@ -114,7 +87,6 @@ model Charger {
   @@index([deviceId])
   @@index([locationId])
   @@index([status])
-  @@index([vendorId])
 }
 
 model Booking {
