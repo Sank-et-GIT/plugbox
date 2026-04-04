@@ -14,7 +14,7 @@ const AdminChargers = () => {
 
   const fetchChargers = async () => {
     try {
-      const response = await axios.get('/api/admin/chargers');
+      const response = await axios.get('/api/chargers');
       setChargers(response.data.chargers);
     } catch (error) {
       console.error('Failed to fetch chargers:', error);
@@ -25,13 +25,13 @@ const AdminChargers = () => {
 
   const toggleChargerStatus = async (chargerId, newStatus) => {
     try {
-      await axios.patch(`/api/admin/chargers/${chargerId}/status`, {
+      await axios.patch(`/api/chargers/${chargerId}/status`, {
         status: newStatus
       });
       
       // Update local state
       setChargers(chargers.map(charger => 
-        charger.id === chargerId 
+        charger._id === chargerId 
           ? { ...charger, status: newStatus }
           : charger
       ));
@@ -41,21 +41,24 @@ const AdminChargers = () => {
   };
 
   const filteredChargers = chargers.filter(charger => {
-    const matchesSearch = charger.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = charger.chargerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          charger.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          charger.vendor?.companyName?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesFilter = filterStatus === 'all' || charger.status === filterStatus;
+    const matchesFilter = filterStatus === 'all' || charger.status?.toLowerCase() === filterStatus.toLowerCase();
     
     return matchesSearch && matchesFilter;
   });
 
   const getStatusColor = (status) => {
-    switch (status) {
+    switch (status?.toUpperCase()) {
+      case 'AVAILABLE':
       case 'ONLINE': return 'bg-green-100 text-green-800';
       case 'OFFLINE': return 'bg-red-100 text-red-800';
+      case 'ON_MAINTENANCE':
       case 'MAINTENANCE': return 'bg-yellow-100 text-yellow-800';
       case 'IN_SESSION': return 'bg-blue-100 text-blue-800';
+      case 'RESERVED': return 'bg-purple-100 text-purple-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -93,7 +96,7 @@ const AdminChargers = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Online</p>
-              <p className="text-2xl font-bold text-green-600">{chargers.filter(c => c.status === 'ONLINE').length}</p>
+              <p className="text-2xl font-bold text-green-600">{chargers.filter(c => c.status?.toLowerCase() === 'available' || c.status?.toLowerCase() === 'online').length}</p>
             </div>
             <div className="bg-green-100 p-3 rounded-full">
               <Activity className="h-6 w-6 text-green-600" />
@@ -105,7 +108,7 @@ const AdminChargers = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">In Session</p>
-              <p className="text-2xl font-bold text-blue-600">{chargers.filter(c => c.status === 'IN_SESSION').length}</p>
+              <p className="text-2xl font-bold text-blue-600">{chargers.filter(c => c.status?.toLowerCase() === 'in_session').length}</p>
             </div>
             <div className="bg-blue-100 p-3 rounded-full">
               <Zap className="h-6 w-6 text-blue-600" />
@@ -117,7 +120,7 @@ const AdminChargers = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Offline</p>
-              <p className="text-2xl font-bold text-red-600">{chargers.filter(c => c.status === 'OFFLINE').length}</p>
+              <p className="text-2xl font-bold text-red-600">{chargers.filter(c => c.status?.toLowerCase() === 'offline').length}</p>
             </div>
             <div className="bg-red-100 p-3 rounded-full">
               <Activity className="h-6 w-6 text-red-600" />
@@ -149,10 +152,11 @@ const AdminChargers = () => {
               className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="all">All Status</option>
-              <option value="ONLINE">Online</option>
-              <option value="OFFLINE">Offline</option>
-              <option value="IN_SESSION">In Session</option>
-              <option value="MAINTENANCE">Maintenance</option>
+              <option value="available">Available</option>
+              <option value="offline">Offline</option>
+              <option value="in_session">In Session</option>
+              <option value="reserved">Reserved</option>
+              <option value="on_maintenance">Maintenance</option>
             </select>
           </div>
         </div>
@@ -189,12 +193,12 @@ const AdminChargers = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredChargers.map((charger) => (
-                <tr key={charger.id} className="hover:bg-gray-50">
+                <tr key={charger._id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
                       <div className="text-sm font-medium text-gray-900">{charger.displayName}</div>
                       <div className="text-sm text-gray-500">{charger.name}</div>
-                      <div className="text-xs text-gray-400">ID: {charger.id}</div>
+                      <div className="text-xs text-gray-400">ID: {charger._id}</div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -204,7 +208,7 @@ const AdminChargers = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center text-sm text-gray-900">
                       <MapPin className="h-4 w-4 mr-1 text-gray-400" />
-                      {charger.location?.name || 'No location'}
+                      {charger.location?.address || 'No location'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -213,7 +217,7 @@ const AdminChargers = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {charger.sessionCount || 0}
+                    {charger.totalSessions || 0}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(charger.createdAt).toLocaleDateString()}
@@ -222,12 +226,14 @@ const AdminChargers = () => {
                     <div className="flex justify-end space-x-2">
                       <select
                         value={charger.status}
-                        onChange={(e) => toggleChargerStatus(charger.id, e.target.value)}
+                        onChange={(e) => toggleChargerStatus(charger._id, e.target.value)}
                         className="text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
                       >
-                        <option value="ONLINE">Online</option>
-                        <option value="OFFLINE">Offline</option>
-                        <option value="MAINTENANCE">Maintenance</option>
+                        <option value="available">Available</option>
+                        <option value="offline">Offline</option>
+                        <option value="on_maintenance">Maintenance</option>
+                        <option value="in_session">In Session</option>
+                        <option value="reserved">Reserved</option>
                       </select>
                       <button className="p-1 text-blue-600 hover:text-blue-900" title="View Details">
                         <Eye className="h-5 w-5" />

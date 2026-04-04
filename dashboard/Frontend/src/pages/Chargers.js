@@ -40,8 +40,13 @@ const Chargers = () => {
       if (searchTerm) params.search = searchTerm;
       if (statusFilter !== 'all') params.status = statusFilter;
 
-      const response = await axios.get('/api/chargers', { params });
-      setChargers(response.data.chargers || []);
+      // Use different endpoint based on user role
+      const endpoint = user?.role === 'admin' ? '/api/chargers' : '/api/vendor/chargers';
+      const response = await axios.get(endpoint, { params });
+      
+      // Handle different response formats
+      const chargersData = user?.role === 'admin' ? response.data.chargers : response.data.data;
+      setChargers(chargersData || []);
       setTotalPages(response.data.pagination?.pages || 1);
     } catch (err) {
       console.error('Error fetching chargers:', err);
@@ -64,7 +69,8 @@ const Chargers = () => {
     if (!window.confirm('Are you sure you want to delete this charger?')) return;
     
     try {
-      await axios.delete(`/api/chargers/${chargerId}`);
+      const endpoint = user?.role === 'admin' ? `/api/chargers/${chargerId}` : `/api/vendor/chargers/${chargerId}`;
+      await axios.delete(endpoint);
       fetchChargers();
     } catch (err) {
       setError('Failed to delete charger');

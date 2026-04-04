@@ -29,8 +29,8 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUser = async () => {
     try {
-      const response = await axios.get('/api/vendor/auth/me');
-      setUser(response.data.vendor);
+      const response = await axios.get('/api/auth/me');
+      setUser(response.data.user);
     } catch (error) {
       console.error('Failed to fetch user:', error);
       localStorage.removeItem('token');
@@ -42,12 +42,12 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post('/api/vendor/auth/login', { email, password });
-      const { token, vendor } = response.data;
+      const response = await axios.post('/api/auth/login', { email, password });
+      const { token, user } = response.data;
       
       localStorage.setItem('token', token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(vendor);
+      setUser(user);
       setLoading(false); // Set loading to false after successful login
       
       return { success: true };
@@ -84,7 +84,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await axios.post('/api/vendor/auth/logout');
+      await axios.post('/api/auth/logout');
     } catch (error) {
       console.error('Logout error:', error);
     } finally {

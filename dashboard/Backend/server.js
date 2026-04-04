@@ -6,7 +6,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 
 const connectDB = require("./config/db");
-const authRoutes = require("./routes/simple-auth");
+const authRoutes = require("./routes/auth-prisma");
 const vendorAuthRoutes = require("./routes/vendorAuth");
 const adminRoutes = require("./routes/adminRoutes");
 const dashboardRoutes = require("./routes/dashboard");
@@ -31,6 +31,10 @@ const limiter = rateLimit({
   max: 100, // limit each IP to 100 requests per windowMs
   message: {
     error: 'Too many requests from this IP, please try again later.'
+  },
+  trustProxy: false,
+  skip: (req) => {
+    return req.url === '/health' || req.url === '/';
   }
 });
 
