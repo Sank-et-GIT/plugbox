@@ -33,9 +33,9 @@ const Sidebar = () => {
 
   const adminMenuItems = [
     { path: '/admin/dashboard', icon: Home, label: 'Dashboard' },
-    { path: '/chargers', icon: Zap, label: 'Chargers' },
-    { path: '/vendors', icon: Users, label: 'Vendors' },
-    { path: '/users', icon: User, label: 'Users' },
+    { path: '/admin/chargers', icon: Zap, label: 'Chargers' },
+    { path: '/admin/vendors', icon: Users, label: 'Vendors' },
+    { path: '/admin/users', icon: User, label: 'Users' },
     { path: '/sessions', icon: Calendar, label: 'Sessions' },
     { path: '/payments', icon: CreditCard, label: 'Payments' },
     { path: '/payouts', icon: TrendingUp, label: 'Payouts' },
