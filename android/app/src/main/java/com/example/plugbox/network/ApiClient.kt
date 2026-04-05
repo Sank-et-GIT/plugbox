@@ -44,7 +44,9 @@ object ApiClient {
             .edit {
                 putString(KEY_TOKEN, token)
                     .putString(KEY_USER_ID, userId)
-                    .putBoolean("logged_in", true)  // PlugBoxAppRoot reads this
+                    .putBoolean("logged_in", true)
+                    .apply()
+                                                             // PlugBoxAppRoot reads this
             }
     }
 
