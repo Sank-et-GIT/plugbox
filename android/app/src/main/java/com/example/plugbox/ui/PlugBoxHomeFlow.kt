@@ -40,10 +40,10 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
     }
 
     // ── Active session recovery on app launch ─────────────────────────────────
-    LaunchedEffect(Unit) {
+    LaunchedEffect(Unit) launch@{
         try {
             // getUserId returns null if not logged in — fall back to test user
-            val userId = ApiClient.getUserId(context) ?: "rashi"
+            val userId = ApiClient.getUserId(context) ?: return@launch
             val res    = ApiClient.api.activeSession(userId)
 
             if (res.active && res.sessionId != null) {
@@ -133,8 +133,8 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
                     selectedPackage = pkg
                     scope.launch {
                         try {
-                            // getUserId returns null → fall back to "rashi" for testing
-                            val userId = ApiClient.getUserId(context) ?: "rashi"
+                            // getUserId returns null → now i have hardcoded my uuid
+                            val userId = ApiClient.getUserId(context) ?: "955f1a7d-204b-4fc1-9645-24269439f348"
 
                             val res = ApiClient.api.hold(
                                 HoldRequest(
@@ -178,7 +178,7 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
                 onIveArrived    = {
                     scope.launch {
                         try {
-                            val userId = ApiClient.getUserId(context) ?: "rashi"
+                            val userId = ApiClient.getUserId(context) ?: "955f1a7d-204b-4fc1-9645-24269439f348"
 
                             val res = ApiClient.api.start(
                                 StartRequest(

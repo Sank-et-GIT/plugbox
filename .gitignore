@@ -113,3 +113,6 @@ plugbox-baded-firebase-adminsdk-fbsvc-176078696c.json
 node_modules/
 .env
 plugbox-baded-firebase-adminsdk-fbsvc-176078696c.json
+
+logs/
+*.log

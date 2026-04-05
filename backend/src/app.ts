@@ -10,6 +10,10 @@ import sessionsRoutes        from "./routes/sessions";
 import deviceStatusRoutes    from "./routes/deviceStatus";
 import authRoutes            from "./routes/auth";
 import walletRoutes          from "./routes/wallet";
+import { requestIdMiddleware } from "./middleware/requestId";
+import { requestLogger } from "./middleware/requestLogger";
+import { errorHandler } from "./middleware/errorHandler";
+import { logError } from "./lib/logger";
 
 import {
   connectMqtt,
@@ -30,22 +34,21 @@ app.set("trust proxy", true);
 // Raw body for Razorpay webhook HMAC — must be before express.json()
 app.use("/wallet/razorpay-webhook", express.raw({ type: "application/json" }));
 
+
+// Request logger
 app.use(cors());
 app.use(express.json());
 
-// Request logger
-app.use((req, res, next) => {
-  const start = Date.now();
-  res.on("finish", () => {
-    const ms = Date.now() - start;
-    console.log(`[HTTP] ${req.method} ${req.originalUrl} → ${res.statusCode} (${ms}ms)`);
-  });
-  next();
-});
+app.use(requestIdMiddleware);
+app.use(requestLogger);
 
 // Health
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
+});
+
+app.get("/test-error", () => {
+  throw new Error("test route error");
 });
 
 // Routes
@@ -64,6 +67,8 @@ app.use((_req, res) => {
   res.status(404).json({ error: "Not Found" });
 });
 
+app.use(errorHandler);
+
 // ── Wire MQTT (breaks circular import) ───────────────────────────────────────
 //
 // Both modules are now fully loaded. Wire them together:
@@ -74,5 +79,21 @@ app.use((_req, res) => {
 initMqttHandler(mqttPublish, subscribeAllChargers); // handler gets publish fn
 setMessageHandler(handleMqttMessage);               // client gets handler fn
 connectMqtt();                                      // connect to HiveMQ
+
+process.on("uncaughtException", (err) => {
+  logError("uncaught_exception", {
+    category: "error",
+    errorMessage: err.message,
+    stack: err.stack,
+  });
+});
+
+process.on("unhandledRejection", (reason: any) => {
+  logError("unhandled_rejection", {
+    category: "error",
+    errorMessage: reason?.message || String(reason),
+    stack: reason?.stack,
+  });
+});
 
 export default app;
