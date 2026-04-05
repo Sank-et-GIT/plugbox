@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { PrismaClient } = require("@prisma/client");
+const bcrypt = require('bcryptjs');
 
 const prisma = new PrismaClient();
 
@@ -109,6 +110,9 @@ router.post("/vendor-users", async (req, res) => {
 
     // Create user and vendor in a transaction
     const result = await prisma.$transaction(async (tx) => {
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
       // Create user
       const user = await tx.user.create({
         data: {
@@ -128,7 +132,7 @@ router.post("/vendor-users", async (req, res) => {
           companyName: companyName || "",
           email: email || `${phone}@vendor.com`,
           phoneNumber: phone,
-          password,
+          password: hashedPassword, // Store hashed password
           isActive: true,
           kycStatus: "PENDING",
           walletBalance: 0,

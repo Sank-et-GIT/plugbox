@@ -104,6 +104,10 @@ model Charger {
   mqttTopic      String?
   slotNumber     Int             @default(1)
   vendorId       String?
+  chargerType    String?         @default("AC")
+  connectorType  String?         @default("Type2")
+  pricePerUnit   Float?          @default(10.0)
+  serialNumber   String?
   bookings       Booking[]
   location       Location?       @relation(fields: [locationId], references: [id])
   vendor         Vendor?         @relation(fields: [vendorId], references: [id])

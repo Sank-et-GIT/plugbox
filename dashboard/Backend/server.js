@@ -44,7 +44,9 @@ const limiter = rateLimit({
   trustProxy: false,
   skip: (req) => {
     return req.url === '/health' || req.url === '/';
-  }
+  },
+  standardHeaders: true,
+  legacyHeaders: false
 });
 
 // Connect to database
