@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, ToggleLeft, ToggleRight, Eye, Edit, Trash2, Users, DollarSign, Zap, Calendar } from 'lucide-react';
+import { Search, Filter, ToggleLeft, ToggleRight, Eye, Edit, Trash2, Users, DollarSign, Zap, Calendar, Plus, X } from 'lucide-react';
 import axios from 'axios';
 
 const AdminVendors = () => {
@@ -8,6 +8,14 @@ const AdminVendors = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newVendor, setNewVendor] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    companyName: ''
+  });
 
   useEffect(() => {
     fetchVendors();
@@ -15,7 +23,7 @@ const AdminVendors = () => {
 
   const fetchVendors = async () => {
     try {
-      const response = await axios.get('/api/admin/vendors');
+      const response = await axios.get('/api/admin/vendor-users');
       setVendors(response.data.vendors);
     } catch (error) {
       console.error('Failed to fetch vendors:', error);
@@ -30,9 +38,41 @@ const AdminVendors = () => {
     await fetchVendors();
   };
 
+  const handleCreateVendor = async () => {
+    try {
+      await axios.post('/api/admin/vendor-users', newVendor);
+      setShowAddModal(false);
+      setNewVendor({
+        name: '',
+        email: '',
+        phone: '',
+        password: '',
+        companyName: ''
+      });
+      await fetchVendors();
+    } catch (error) {
+      console.error('Failed to create vendor:', error);
+      alert(error.response?.data?.error || 'Failed to create vendor');
+    }
+  };
+
+  const handleDeleteVendor = async (vendorId) => {
+    if (!window.confirm('Are you sure you want to delete this vendor? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      await axios.delete(`/api/admin/vendor-users/${vendorId}`);
+      await fetchVendors();
+    } catch (error) {
+      console.error('Failed to delete vendor:', error);
+      alert(error.response?.data?.error || 'Failed to delete vendor');
+    }
+  };
+
   const toggleVendorStatus = async (vendorId, currentStatus) => {
     try {
-      await axios.patch(`/api/admin/vendors/${vendorId}/status`, {
+      await axios.patch(`/api/admin/vendor-users/${vendorId}/status`, {
         isActive: !currentStatus
       });
       
@@ -70,8 +110,19 @@ const AdminVendors = () => {
   return (
     <div className="p-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Vendor Management</h1>
-        <p className="text-gray-600 mt-2">Manage all charging vendors in the system</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Vendor Management</h1>
+            <p className="text-gray-600 mt-2">Manage all charging vendors in the system</p>
+          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <Plus className="h-5 w-5" />
+            <span>Add Vendor</span>
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -235,6 +286,13 @@ const AdminVendors = () => {
                       <button className="p-1 text-gray-600 hover:text-gray-900" title="Edit">
                         <Edit className="h-5 w-5" />
                       </button>
+                      <button
+                        onClick={() => handleDeleteVendor(vendor.id)}
+                        className="p-1 text-red-600 hover:text-red-900"
+                        title="Delete Vendor"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -249,6 +307,108 @@ const AdminVendors = () => {
           </div>
         )}
       </div>
+
+      {/* Add Vendor Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Add New Vendor</h2>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  value={newVendor.name}
+                  onChange={(e) => setNewVendor({...newVendor, name: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter vendor name"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={newVendor.email}
+                  onChange={(e) => setNewVendor({...newVendor, email: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter email address"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Phone Number *
+                </label>
+                <input
+                  type="tel"
+                  value={newVendor.phone}
+                  onChange={(e) => setNewVendor({...newVendor, phone: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter phone number"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Password *
+                </label>
+                <input
+                  type="password"
+                  value={newVendor.password}
+                  onChange={(e) => setNewVendor({...newVendor, password: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter password"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Company Name
+                </label>
+                <input
+                  type="text"
+                  value={newVendor.companyName}
+                  onChange={(e) => setNewVendor({...newVendor, companyName: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter company name"
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateVendor}
+                disabled={!newVendor.phone || !newVendor.password}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Create Vendor
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

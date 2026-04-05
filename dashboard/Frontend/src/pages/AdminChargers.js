@@ -15,7 +15,7 @@ const AdminChargers = () => {
 
   const fetchChargers = async () => {
     try {
-      const response = await axios.get('/api/chargers');
+      const response = await axios.get('/api/public/test-chargers');
       setChargers(response.data.chargers);
     } catch (error) {
       console.error('Failed to fetch chargers:', error);
@@ -32,7 +32,7 @@ const AdminChargers = () => {
 
   const toggleChargerStatus = async (chargerId, newStatus) => {
     try {
-      await axios.patch(`/api/chargers/${chargerId}/status`, {
+      await axios.patch(`/api/admin/chargers/${chargerId}/status`, {
         status: newStatus
       });
       
