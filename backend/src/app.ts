@@ -50,7 +50,7 @@ app.get("/health", (_req, res) => {
 });
 
 // Routes
-app.use("/auth",     authRoutes);
+app.use("/api/auth",     authRoutes);
 app.use("/wallet",   walletRoutes);
 app.use("/bookings", bookingsRoutes);
 app.use("/device",   deviceCommandsRoutes);

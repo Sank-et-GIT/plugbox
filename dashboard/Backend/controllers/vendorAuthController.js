@@ -80,7 +80,7 @@ const loginVendor = async (req, res) => {
     const { email, password } = req.body;
 
     // Check for hardcoded admin credentials first
-    if (email === 'admin@plugbox.com' && password === 'admin123') {
+    if (email === 'admin@plugbox.com' && password === 'password123') {
       const token = generateToken('admin_user_id');
       
       return res.json({

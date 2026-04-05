@@ -45,13 +45,18 @@ const vendorAuth = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Check if it's the hardcoded admin
-    if (decoded.id === 'admin_user_id') {
+    // Check if it's a regular admin user from database
+    const adminUser = await prisma.user.findUnique({
+      where: { id: decoded.id }
+    });
+    
+    if (adminUser && adminUser.role === 'admin') {
       req.vendor = {
-        id: 'admin_user_id',
-        email: 'admin@plugbox.com',
+        id: adminUser.id,
+        email: adminUser.email,
         role: 'admin',
-        isActive: true
+        isActive: adminUser.isActive,
+        user: adminUser
       };
       return next();
     }

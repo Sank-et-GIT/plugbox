@@ -11,10 +11,11 @@ model User {
   id          String    @id @default(uuid())
   phone       String    @unique
   name        String    @default("")
+  email       String?   @unique
+  password    String?   @default("")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   firebaseUid String    @unique
-  email       String?   @unique
   isActive    Boolean   @default(true)
   lastLogin   DateTime?
   role        String    @default("user")
@@ -36,6 +37,7 @@ model Vendor {
   phoneNumber   String
   password      String
   isActive      Boolean   @default(true)
+  status        String    @default("ACTIVE")
   kycStatus     String    @default("PENDING")
   walletBalance Float     @default(0)
   createdAt     DateTime  @default(now())

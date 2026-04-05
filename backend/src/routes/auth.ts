@@ -36,6 +36,7 @@ import * as admin                    from "firebase-admin";
 import * as jwt                      from "jsonwebtoken";
 import * as fs                       from "fs";
 import * as path                     from "path";
+import * as bcrypt                   from "bcryptjs";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -202,6 +203,244 @@ router.post("/update-name", async (req: Request, res: Response) => {
   } catch (err) {
     console.error("[AUTH] update-name error:", err);
     res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /auth/login
+//
+// Body:    { email: "user@example.com", password: "password" }
+// Returns: { success, token, user, message }
+//
+// Unified login endpoint for both admin and vendor
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/login", async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body as { email: string; password: string };
+
+    if (!email || !password) {
+      res.status(400).json({ 
+        success: false, 
+        message: "Email and password are required" 
+      });
+      return;
+    }
+
+    // First check if it's an admin user
+    const admin = await prisma.user.findUnique({
+      where: { 
+        email,
+        role: "admin" 
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        phone: true,
+        password: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+
+    if (admin) {
+      // Admin login
+      if (!admin.isActive) {
+        res.status(401).json({ 
+          success: false, 
+          message: "Account is deactivated" 
+        });
+        return;
+      }
+
+      if (admin.password !== password) {
+        res.status(401).json({ 
+          success: false, 
+          message: "Invalid email or password" 
+        });
+        return;
+      }
+
+      const token = signToken(admin.id);
+
+      console.log(`[AUTH] Admin Login: ${email} → userId=${admin.id}`);
+
+      res.json({
+        success: true,
+        message: "Login successful",
+        token,
+        user: {
+          id: admin.id,
+          email: admin.email,
+          name: admin.name,
+          phone: admin.phone,
+          role: "admin",
+          createdAt: admin.createdAt,
+        },
+      });
+      return;
+    }
+
+    // Check if it's a vendor
+    const vendor = await prisma.vendor.findUnique({
+      where: { email },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    if (vendor) {
+      // Vendor login
+      if (!vendor.user?.isActive) {
+        res.status(401).json({ 
+          success: false, 
+          message: "Account is deactivated" 
+        });
+        return;
+      }
+
+      if (vendor.password !== password) {
+        res.status(401).json({ 
+          success: false, 
+          message: "Invalid email or password" 
+        });
+        return;
+      }
+
+      const token = signToken(vendor.user.id);
+
+      console.log(`[AUTH] Vendor Login: ${email} → userId=${vendor.user.id}`);
+
+      res.json({
+        success: true,
+        message: "Login successful",
+        token,
+        user: {
+          id: vendor.user.id,
+          email: vendor.email,
+          name: vendor.user.name,
+          phone: vendor.user.phone,
+          role: "vendor",
+          vendorId: vendor.id,
+          companyName: vendor.companyName,
+          kycStatus: vendor.kycStatus,
+        },
+      });
+      return;
+    }
+
+    // No user found
+    res.status(401).json({ 
+      success: false, 
+      message: "Invalid email or password" 
+    });
+
+  } catch (err) {
+    console.error("[AUTH] login error:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Server error" 
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /auth/admin-login
+//
+// Body:    { email: "admin@example.com", password: "password" }
+// Returns: { success, token, admin, message }
+//
+// Admin login with email/password authentication
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/admin-login", async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body as { email: string; password: string };
+
+    if (!email || !password) {
+      res.status(400).json({ 
+        success: false, 
+        message: "Email and password are required" 
+      });
+      return;
+    }
+
+    // Find admin user by email and role
+    const admin = await prisma.user.findUnique({
+      where: { 
+        email,
+        role: "admin" 
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        phone: true,
+        password: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+
+    if (!admin) {
+      res.status(401).json({ 
+        success: false, 
+        message: "Invalid email or password" 
+      });
+      return;
+    }
+
+    // Check if admin is active
+    if (!admin.isActive) {
+      res.status(401).json({ 
+        success: false, 
+        message: "Account is deactivated" 
+      });
+      return;
+    }
+
+    // Verify password (assuming plain text for now)
+    if (admin.password !== password) {
+      res.status(401).json({ 
+        success: false, 
+        message: "Invalid email or password" 
+      });
+      return;
+    }
+
+    // Sign JWT token
+    const token = signToken(admin.id);
+
+    console.log(`[AUTH] Admin Login: ${email} → userId=${admin.id}`);
+
+    res.json({
+      success: true,
+      message: "Login successful",
+      token,
+      admin: {
+        id: admin.id,
+        email: admin.email,
+        name: admin.name,
+        phone: admin.phone,
+        role: "admin",
+        createdAt: admin.createdAt,
+      },
+    });
+
+  } catch (err) {
+    console.error("[AUTH] admin-login error:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Server error" 
+    });
   }
 });
 
