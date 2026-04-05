@@ -54,9 +54,7 @@ const Login = () => {
           <p className="mt-2 text-center text-sm text-gray-600">
             Sign in to your account
           </p>
-          <p className="mt-2 text-center text-xs text-gray-500">
-            Test Credentials: dashboard1@plugbox.com / vendor123
-          </p>
+         
         </div>
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>

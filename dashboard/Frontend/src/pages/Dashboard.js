@@ -159,16 +159,19 @@ const Dashboard = () => {
         <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Active Sessions</h2>
-            <span className="text-sm text-gray-500">{activeSessions.length} charging</span>
+            <span className="text-sm text-gray-500">{activeSessions.filter(session => session.status === 'ACTIVE').length} charging</span>
           </div>
           <div className="space-y-4">
-            {activeSessions.length === 0 ? (
+            {activeSessions.filter(session => session.status === 'ACTIVE').length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Activity className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                 <p>No active charging sessions</p>
               </div>
             ) : (
-              activeSessions.slice(0, 5).map((session) => (
+              activeSessions
+                .filter(session => session.status === 'ACTIVE')
+                .slice(0, 5)
+                .map((session) => (
                 <div key={session.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                   <div className="flex items-center space-x-4">
                     <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
@@ -188,10 +191,10 @@ const Dashboard = () => {
                 </div>
               ))
             )}
-            {activeSessions.length > 5 && (
+            {activeSessions.filter(session => session.status === 'ACTIVE').length > 5 && (
               <div className="text-center pt-2">
                 <button className="text-sm text-blue-600 hover:text-blue-700">
-                  View all {activeSessions.length} sessions →
+                  View all {activeSessions.filter(session => session.status === 'ACTIVE').length} sessions →
                 </button>
               </div>
             )}

@@ -28,7 +28,50 @@ const AdminChargers = () => {
 
   const [editingCharger, setEditingCharger] = useState(null);
 
-  const [stats, setStats] = useState(null);
+  // Calculate stats dynamically from chargers data
+  const calculateStats = () => {
+    const totalChargers = chargers.length;
+    const availableChargers = chargers.filter(charger => 
+      charger.status?.toLowerCase() === 'available' || 
+      charger.status?.toLowerCase() === 'online'
+    ).length;
+    const inSessionChargers = chargers.filter(charger => 
+      charger.status?.toLowerCase() === 'in_session' ||
+      charger.status?.toLowerCase() === 'active'
+    ).length;
+    const offlineChargers = chargers.filter(charger => 
+      charger.status?.toLowerCase() === 'offline'
+    ).length;
+    const reservedChargers = chargers.filter(charger => 
+      charger.status?.toLowerCase() === 'reserved'
+    ).length;
+    const maintenanceChargers = chargers.filter(charger => 
+      charger.status?.toLowerCase() === 'on_maintenance' ||
+      charger.status?.toLowerCase() === 'maintenance'
+    ).length;
+
+    // Debug logging to verify counts
+    console.log('Charger Stats Calculation:', {
+      totalChargers,
+      availableChargers,
+      inSessionChargers,
+      offlineChargers,
+      reservedChargers,
+      maintenanceChargers,
+      allChargers: chargers.map(c => ({ id: c.id, name: c.name, status: c.status, vendor: c.vendor?.name }))
+    });
+
+    return {
+      totalChargers,
+      availableChargers,
+      inSessionChargers,
+      offlineChargers,
+      reservedChargers,
+      maintenanceChargers
+    };
+  };
+
+  const dynamicStats = calculateStats();
 
   const [newCharger, setNewCharger] = useState({
 
@@ -85,8 +128,6 @@ const AdminChargers = () => {
       setChargers(chargersResponse.data.chargers || []);
 
       setVendors(vendorsResponse.data.vendors || []);
-
-      setStats(chargersResponse.data.stats || {});
 
     } catch (error) {
 
@@ -421,7 +462,7 @@ const AdminChargers = () => {
 
       {/* Stats Cards */}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
 
         <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
 
@@ -431,7 +472,7 @@ const AdminChargers = () => {
 
               <p className="text-sm text-gray-600">Total Chargers</p>
 
-              <p className="text-2xl font-bold text-gray-900">{stats?.totalChargers || 0}</p>
+              <p className="text-2xl font-bold text-gray-900">{dynamicStats.totalChargers}</p>
 
             </div>
 
@@ -455,7 +496,7 @@ const AdminChargers = () => {
 
               <p className="text-sm text-gray-600">Available</p>
 
-              <p className="text-2xl font-bold text-green-600">{stats?.availableChargers || 0}</p>
+              <p className="text-2xl font-bold text-green-600">{dynamicStats.availableChargers}</p>
 
             </div>
 
@@ -479,7 +520,7 @@ const AdminChargers = () => {
 
               <p className="text-sm text-gray-600">In Session</p>
 
-              <p className="text-2xl font-bold text-blue-600">{stats?.inSessionChargers || 0}</p>
+              <p className="text-2xl font-bold text-blue-600">{dynamicStats.inSessionChargers}</p>
 
             </div>
 
@@ -503,7 +544,7 @@ const AdminChargers = () => {
 
               <p className="text-sm text-gray-600">Offline</p>
 
-              <p className="text-2xl font-bold text-red-600">{stats?.offlineChargers || 0}</p>
+              <p className="text-2xl font-bold text-red-600">{dynamicStats.offlineChargers}</p>
 
             </div>
 
@@ -517,133 +558,47 @@ const AdminChargers = () => {
 
         </div>
 
-      </div>
+        <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
 
+          <div className="flex items-center justify-between">
 
+            <div>
 
-      {/* Search and Filter */}
+              <p className="text-sm text-gray-600">Reserved</p>
 
-      <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200 mb-6">
+              <p className="text-2xl font-bold text-purple-600">{dynamicStats.reservedChargers}</p>
 
-        <div className="flex flex-col md:flex-row gap-4">
+            </div>
 
-          <div className="flex-1">
+            <div className="bg-purple-100 p-3 rounded-full">
 
-            <div className="relative">
-
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-
-              <input
-
-                type="text"
-
-                placeholder="Search chargers..."
-
-                value={searchTerm}
-
-                onChange={(e) => setSearchTerm(e.target.value)}
-
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-
-              />
+              <Zap className="h-6 w-6 text-purple-600" />
 
             </div>
 
           </div>
 
-          <div className="flex items-center gap-2">
+        </div>
 
-            <Filter className="h-4 w-4 text-gray-400" />
+        <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
 
-            <select
+          <div className="flex items-center justify-between">
 
-              value={filterStatus}
+            <div>
 
-              onChange={(e) => {
+              <p className="text-sm text-gray-600">Maintenance</p>
 
-                if (e.target.value === 'refresh') {
+              <p className="text-2xl font-bold text-yellow-600">{dynamicStats.maintenanceChargers}</p>
 
-                  handleRefresh();
+            </div>
 
-                  e.target.value = filterStatus;
+            <div className="bg-yellow-100 p-3 rounded-full">
 
-                } else {
+              <Activity className="h-6 w-6 text-yellow-600" />
 
-                  setFilterStatus(e.target.value);
-
-                }
-
-              }}
-
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-
-            >
-
-              <option value="refresh" className="text-blue-600 font-semibold">
-
-                🔄 Refresh
-
-              </option>
-
-              <option value="all">All Status</option>
-
-              <option value="Available">Available</option>
-
-              <option value="Offline">Offline</option>
-
-              <option value="In_Session">In Session</option>
-
-              <option value="Reserved">Reserved</option>
-
-              <option value="On_Maintenance">Maintenance</option>
-
-            </select>
+            </div>
 
           </div>
-
-          <div className="flex items-center gap-2">
-
-            <User className="h-4 w-4 text-gray-400" />
-
-            <select
-
-              value={filterVendor}
-
-              onChange={(e) => setFilterVendor(e.target.value)}
-
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-
-            >
-
-              <option value="all">All Vendors</option>
-
-              {vendors.map(vendor => (
-
-                <option key={vendor.vendorId} value={vendor.vendorId}>
-
-                  {vendor.companyName || vendor.name}
-
-                </option>
-
-              ))}
-
-            </select>
-
-          </div>
-
-          <button
-
-            onClick={() => setShowAddModal(true)}
-
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-
-          >
-
-            <Plus className="h-5 w-5" />
-
-            <span>Add Charger</span>
-
-          </button>
 
         </div>
 

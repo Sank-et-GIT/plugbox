@@ -209,3 +209,69 @@ This project is licensed under the MIT License.
 ## Support
 
 For support and questions, please contact the development team.
+
+
+
+
+
+## Commands for Reference
+
+### Individual Commands
+```bash
+# Frontend (React)
+cd Frontend && npm start
+
+# Backend (Node.js)
+cd Backend && npm run dev
+
+# Charger Simulator
+cd Backend && node simulate-charger.js
+
+
+### Combined Commands
+
+**Option 1: Using PowerShell (Windows)**
+```powershell
+# Run all three in separate windows
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd Frontend && npm start"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd Backend && npm run dev"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd Backend && node simulate-charger.js"
+```
+
+**Option 2: Using Command Prompt (Windows)**
+```cmd
+# Open three separate command prompts and run:
+# Terminal 1:
+cd Frontend && npm start
+
+# Terminal 2:
+cd Backend && npm run dev
+
+# Terminal 3:
+cd Backend && node simulate-charger.js
+```
+
+**Option 3: Using npm scripts (add to package.json)**
+```json
+{
+  "scripts": {
+    "start:all": "concurrently \"cd Frontend && npm start\" \"cd Backend && npm run dev\" \"cd Backend && node simulate-charger.js\""
+  }
+}
+```
+
+### Quick Start
+1. Install dependencies: `npm install` (in both Frontend and Backend folders)
+2. Start MongoDB and MQTT broker
+3. Run the commands above in separate terminals
+
+### Charger Simulator Controls
+- **S** - Send Online Status
+- **O** - Send Offline Status  
+- **C** - Toggle Charging
+- **I** - Send IR Event
+- **Q** - Quit 
+
+increase charge for active charger id  
+
+PS C:\Users\prana\OneDrive\Desktop\plugbox\plugbox\dashboard> cd Backend; npx prisma studio
