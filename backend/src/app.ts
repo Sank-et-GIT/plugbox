@@ -1,5 +1,6 @@
 import express from "express";
 import cors    from "cors";
+import "dotenv/config";
 
 import deviceRoutes          from "./routes/device";
 import chargersRoutes        from "./routes/chargers";

@@ -5,6 +5,7 @@ import axios from 'axios';
 const AdminVendors = () => {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
 
@@ -20,7 +21,13 @@ const AdminVendors = () => {
       console.error('Failed to fetch vendors:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchVendors();
   };
 
   const toggleVendorStatus = async (vendorId, currentStatus) => {
@@ -125,9 +132,20 @@ const AdminVendors = () => {
             <Filter className="h-4 w-4 text-gray-400" />
             <select
               value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
+              onChange={(e) => {
+                if (e.target.value === 'refresh') {
+                  handleRefresh();
+                  // Reset to previous value after refresh
+                  e.target.value = filterStatus;
+                } else {
+                  setFilterStatus(e.target.value);
+                }
+              }}
               className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
+              <option value="refresh" className="text-blue-600 font-semibold">
+                🔄 Refresh Status
+              </option>
               <option value="all">All Status</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>

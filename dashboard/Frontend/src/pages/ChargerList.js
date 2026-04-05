@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Edit, Trash2, MapPin, Zap, DollarSign, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Filter, Edit, Trash2, MapPin, Zap, DollarSign, MoreVertical, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -7,6 +7,7 @@ const ChargerList = () => {
   const { user } = useAuth();
   const [chargers, setChargers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -27,7 +28,7 @@ const ChargerList = () => {
 
   const fetchChargers = async () => {
     try {
-      setLoading(true);
+      if (!refreshing) setLoading(true);
       const params = {
         page: currentPage,
         limit: 10,
@@ -54,7 +55,14 @@ const ChargerList = () => {
       console.error('Error fetching chargers:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchChargers();
+    await fetchChargerStats();
   };
 
   const fetchChargerStats = async () => {
@@ -281,9 +289,20 @@ const ChargerList = () => {
               <Filter className="h-5 w-5 text-gray-600" />
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => {
+                  if (e.target.value === 'refresh') {
+                    handleRefresh();
+                    // Reset to previous value after refresh
+                    e.target.value = statusFilter;
+                  } else {
+                    setStatusFilter(e.target.value);
+                  }
+                }}
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
+                <option value="refresh" className="text-blue-600 font-semibold">
+                  🔄 Refresh Status
+                </option>
                 <option value="all">All Status</option>
                 <option value="Available">Available</option>
                 <option value="In_Session">In Session</option>

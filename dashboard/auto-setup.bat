@@ -2,7 +2,7 @@
 echo ========================================
 echo PlugBox Charger Management Auto-Setup
 echo ========================================
-echo.
+echo.   
 
 echo [1/5] Checking if Backend is running...
 curl -s http://localhost:5000/health >nul 2>&1

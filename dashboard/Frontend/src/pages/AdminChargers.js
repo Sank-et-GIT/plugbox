@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, ToggleLeft, ToggleRight, Eye, Edit, Zap, MapPin, User, Activity } from 'lucide-react';
+import { Search, Filter, ToggleLeft, ToggleRight, Eye, Edit, Zap, MapPin, User, Activity, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 
 const AdminChargers = () => {
   const [chargers, setChargers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
 
@@ -20,7 +21,13 @@ const AdminChargers = () => {
       console.error('Failed to fetch chargers:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchChargers();
   };
 
   const toggleChargerStatus = async (chargerId, newStatus) => {
@@ -31,7 +38,7 @@ const AdminChargers = () => {
       
       // Update local state
       setChargers(chargers.map(charger => 
-        charger._id === chargerId 
+        charger.id === chargerId 
           ? { ...charger, status: newStatus }
           : charger
       ));
@@ -41,7 +48,7 @@ const AdminChargers = () => {
   };
 
   const filteredChargers = chargers.filter(charger => {
-    const matchesSearch = charger.chargerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = charger.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          charger.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          charger.vendor?.companyName?.toLowerCase().includes(searchTerm.toLowerCase());
     
@@ -148,9 +155,20 @@ const AdminChargers = () => {
             <Filter className="h-4 w-4 text-gray-400" />
             <select
               value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
+              onChange={(e) => {
+                if (e.target.value === 'refresh') {
+                  handleRefresh();
+                  // Reset to previous value after refresh
+                  e.target.value = filterStatus;
+                } else {
+                  setFilterStatus(e.target.value);
+                }
+              }}
               className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
+              <option value="refresh" className="text-blue-600 font-semibold">
+                🔄 Refresh Status
+              </option>
               <option value="all">All Status</option>
               <option value="available">Available</option>
               <option value="offline">Offline</option>
@@ -193,12 +211,12 @@ const AdminChargers = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredChargers.map((charger) => (
-                <tr key={charger._id} className="hover:bg-gray-50">
+                <tr key={charger.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
-                      <div className="text-sm font-medium text-gray-900">{charger.displayName}</div>
-                      <div className="text-sm text-gray-500">{charger.name}</div>
-                      <div className="text-xs text-gray-400">ID: {charger._id}</div>
+                      <div className="text-sm font-medium text-gray-900">{charger.name}</div>
+                      <div className="text-sm text-gray-500">{charger.displayName}</div>
+                      <div className="text-xs text-gray-400">ID: {charger.id}</div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -213,11 +231,11 @@ const AdminChargers = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(charger.status)}`}>
-                      {charger.status.replace('_', ' ')}
+                      {charger.status?.replace('_', ' ') || charger.status}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {charger.totalSessions || 0}
+                    {charger.sessionCount || 0}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(charger.createdAt).toLocaleDateString()}
@@ -226,7 +244,7 @@ const AdminChargers = () => {
                     <div className="flex justify-end space-x-2">
                       <select
                         value={charger.status}
-                        onChange={(e) => toggleChargerStatus(charger._id, e.target.value)}
+                        onChange={(e) => toggleChargerStatus(charger.id, e.target.value)}
                         className="text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500"
                       >
                         <option value="available">Available</option>

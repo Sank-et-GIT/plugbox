@@ -1,8 +1,12 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
+import vendorRoutes from "./vendors";
 
 const router = Router();
 const prisma = new PrismaClient();
+
+// Use vendor routes
+router.use("/", vendorRoutes);
 
 // GET /admin/chargers
 router.get("/chargers", async (_req, res) => {

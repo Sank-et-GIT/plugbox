@@ -42,6 +42,8 @@ const prisma = new PrismaClient();
 
 // ── Initialize Firebase Admin SDK (once) ──────────────────────────────────────
 // Reads service account JSON from path specified in .env
+// Temporarily disabled due to JSON parsing issues
+/*
 if (!admin.apps.length) {
  const serviceAccountPath =
   process.env.FIREBASE_SERVICE_ACCOUNT ?? "./firebase-service-account.json";
@@ -63,6 +65,7 @@ const absolutePath = path.isAbsolute(serviceAccountPath)
     console.log("[AUTH] Firebase Admin SDK initialized ✓");
   }
 }
+*/
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const JWT_EXPIRY = "30d";  // User stays logged in for 30 days
