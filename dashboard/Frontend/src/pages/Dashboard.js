@@ -4,6 +4,9 @@ import StatCard from '../components/StatCard';
 import ChargerStatus from '../components/ChargerStatus';
 import RevenueChart from '../components/RevenueChart';
 import SessionsChart from '../components/SessionsChart';
+import VendorStatusChart from '../components/VendorStatusChart';
+import ChargerDistributionChart from '../components/ChargerDistributionChart';
+import SessionTrendChart from '../components/SessionTrendChart';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -18,6 +21,10 @@ const Dashboard = () => {
   });
   const [revenueData, setRevenueData] = useState([]);
   const [sessionsData, setSessionsData] = useState([]);
+  const [vendorStatusData, setVendorStatusData] = useState([]);
+  const [chargerDistributionData, setChargerDistributionData] = useState([]);
+  const [sessionTrendsData, setSessionTrendsData] = useState([]);
+  const [activeSessions, setActiveSessions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,8 +37,19 @@ const Dashboard = () => {
 
   const fetchAdminDashboardData = async () => {
     try {
-      const response = await axios.get('/api/admin/dashboard');
-      setStats(response.data.stats);
+      const [statsResponse, vendorStatusResponse, chargerDistResponse, sessionTrendsResponse, activeSessionsResponse] = await Promise.all([
+        axios.get('/api/admin/dashboard'),
+        axios.get('/api/admin/vendor-status-data'),
+        axios.get('/api/admin/charger-distribution-data'),
+        axios.get('/api/admin/session-trends-data'),
+        axios.get('/api/admin/active-sessions')
+      ]);
+      
+      setStats(statsResponse.data.stats);
+      setVendorStatusData(vendorStatusResponse.data.data);
+      setChargerDistributionData(chargerDistResponse.data.data);
+      setSessionTrendsData(sessionTrendsResponse.data.data);
+      setActiveSessions(activeSessionsResponse.data.sessions);
     } catch (error) {
       console.error('Failed to fetch admin dashboard data:', error);
     } finally {
@@ -121,62 +139,62 @@ const Dashboard = () => {
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">System Overview</h2>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-700">Total Vendors</span>
-                <span className="font-semibold">{stats.vendors.total}</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-700">Active Vendors</span>
-                <span className="font-semibold text-green-600">{stats.vendors.active}</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-700">Total Chargers</span>
-                <span className="font-semibold">{stats.chargers.total}</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-700">Active Chargers</span>
-                <span className="font-semibold text-green-600">{stats.chargers.active}</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-700">Total Sessions</span>
-                <span className="font-semibold">{stats.sessions.total}</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-700">Active Sessions</span>
-                <span className="font-semibold text-blue-600">{stats.sessions.active}</span>
-              </div>
-            </div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Vendor Status</h2>
+            <VendorStatusChart data={vendorStatusData} />
           </div>
 
           <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-            <div className="space-y-3">
-              <button 
-                onClick={() => window.location.href = '/admin/vendors'}
-                className="w-full text-left px-4 py-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <p className="font-medium text-gray-900">Manage Vendors</p>
-                <p className="text-xs text-gray-500">View and manage all vendors</p>
-              </button>
-              <button 
-                onClick={() => window.location.href = '/admin/chargers'}
-                className="w-full text-left px-4 py-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <p className="font-medium text-gray-900">Manage Chargers</p>
-                <p className="text-xs text-gray-500">View and manage all chargers</p>
-              </button>
-              <button 
-                onClick={() => window.location.href = '/admin/users'}
-                className="w-full text-left px-4 py-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <p className="font-medium text-gray-900">Manage Users</p>
-                <p className="text-xs text-gray-500">View and manage all users</p>
-              </button>
-            </div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Charger Distribution</h2>
+            <ChargerDistributionChart data={chargerDistributionData} />
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Session Trends (7 Days)</h2>
+            <SessionTrendChart data={sessionTrendsData} />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Active Sessions</h2>
+            <span className="text-sm text-gray-500">{activeSessions.length} charging</span>
+          </div>
+          <div className="space-y-4">
+            {activeSessions.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Activity className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <p>No active charging sessions</p>
+              </div>
+            ) : (
+              activeSessions.slice(0, 5).map((session) => (
+                <div key={session.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <Zap className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{session.user?.name || 'Unknown User'}</p>
+                      <p className="text-sm text-gray-500">{session.charger?.displayName || 'Unknown Charger'}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-gray-900 capitalize">{session.status?.replace('_', ' ')}</p>
+                    <p className="text-xs text-gray-500">
+                      {session.finalKwh ? `${session.finalKwh} kWh` : 'Starting...'}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+            {activeSessions.length > 5 && (
+              <div className="text-center pt-2">
+                <button className="text-sm text-blue-600 hover:text-blue-700">
+                  View all {activeSessions.length} sessions →
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -302,9 +320,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+      <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Activities</h2>
             <div className="space-y-4">
               {[1, 2, 3, 4].map((item) => (
@@ -321,28 +337,6 @@ const Dashboard = () => {
               ))}
             </div>
           </div>
-        </div>
-
-        <div>
-          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-            <div className="space-y-3">
-              <button className="w-full text-left px-4 py-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                <p className="font-medium text-gray-900">Add New Vendor</p>
-                <p className="text-xs text-gray-500">Register a new charging vendor</p>
-              </button>
-              <button className="w-full text-left px-4 py-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                <p className="font-medium text-gray-900">Add New Charger</p>
-                <p className="text-xs text-gray-500">Install a new charging station</p>
-              </button>
-              <button className="w-full text-left px-4 py-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                <p className="font-medium text-gray-900">Generate Report</p>
-                <p className="text-xs text-gray-500">Download monthly analytics</p>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

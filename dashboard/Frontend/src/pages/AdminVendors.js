@@ -23,7 +23,7 @@ const AdminVendors = () => {
 
   const fetchVendors = async () => {
     try {
-      const response = await axios.get('/api/admin/vendor-users');
+      const response = await axios.get('/api/admin/vendors');
       setVendors(response.data.vendors);
     } catch (error) {
       console.error('Failed to fetch vendors:', error);
@@ -40,7 +40,7 @@ const AdminVendors = () => {
 
   const handleCreateVendor = async () => {
     try {
-      await axios.post('/api/admin/vendor-users', newVendor);
+      const response = await axios.post('/api/admin/vendors', newVendor);
       setShowAddModal(false);
       setNewVendor({
         name: '',
@@ -50,9 +50,10 @@ const AdminVendors = () => {
         companyName: ''
       });
       await fetchVendors();
+      console.log('Vendor created:', response.data.message);
     } catch (error) {
       console.error('Failed to create vendor:', error);
-      alert(error.response?.data?.error || 'Failed to create vendor');
+      alert(error.response?.data?.message || 'Failed to create vendor');
     }
   };
 
@@ -62,17 +63,18 @@ const AdminVendors = () => {
     }
     
     try {
-      await axios.delete(`/api/admin/vendor-users/${vendorId}`);
+      const response = await axios.delete(`/api/admin/vendors/${vendorId}`);
       await fetchVendors();
+      console.log('Vendor deleted:', response.data.message);
     } catch (error) {
       console.error('Failed to delete vendor:', error);
-      alert(error.response?.data?.error || 'Failed to delete vendor');
+      alert(error.response?.data?.message || 'Failed to delete vendor');
     }
   };
 
   const toggleVendorStatus = async (vendorId, currentStatus) => {
     try {
-      await axios.patch(`/api/admin/vendor-users/${vendorId}/status`, {
+      const response = await axios.patch(`/api/admin/vendors/${vendorId}/status`, {
         isActive: !currentStatus
       });
       
@@ -82,8 +84,16 @@ const AdminVendors = () => {
           ? { ...vendor, isActive: !currentStatus }
           : vendor
       ));
+      
+      console.log('Vendor status updated:', response.data.message);
     } catch (error) {
       console.error('Failed to toggle vendor status:', error);
+      // Revert state if API call fails
+      setVendors(vendors.map(vendor => 
+        vendor.id === vendorId 
+          ? { ...vendor, isActive: currentStatus }
+          : vendor
+      ));
     }
   };
 

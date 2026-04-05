@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, ToggleLeft, ToggleRight, Eye, Edit, Zap, MapPin, User, Activity, RefreshCw } from 'lucide-react';
+import { Search, Filter, ToggleLeft, ToggleRight, Eye, Edit, Zap, MapPin, User, Activity, RefreshCw, Plus, Trash2, X } from 'lucide-react';
 import axios from 'axios';
 
 const AdminChargers = () => {
@@ -8,6 +8,18 @@ const AdminChargers = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingCharger, setEditingCharger] = useState(null);
+  const [newCharger, setNewCharger] = useState({
+    name: '',
+    displayName: '',
+    status: 'OFFLINE',
+    vendorId: '',
+    lat: '',
+    lng: '',
+    address: ''
+  });
 
   useEffect(() => {
     fetchChargers();
@@ -15,7 +27,7 @@ const AdminChargers = () => {
 
   const fetchChargers = async () => {
     try {
-      const response = await axios.get('/api/public/test-chargers');
+      const response = await axios.get('/api/admin/chargers');
       setChargers(response.data.chargers);
     } catch (error) {
       console.error('Failed to fetch chargers:', error);
@@ -32,7 +44,7 @@ const AdminChargers = () => {
 
   const toggleChargerStatus = async (chargerId, newStatus) => {
     try {
-      await axios.patch(`/api/admin/chargers/${chargerId}/status`, {
+      const response = await axios.patch(`/api/admin/chargers/${chargerId}/status`, {
         status: newStatus
       });
       
@@ -42,9 +54,79 @@ const AdminChargers = () => {
           ? { ...charger, status: newStatus }
           : charger
       ));
+      
+      console.log('Charger status updated:', response.data.message);
     } catch (error) {
       console.error('Failed to toggle charger status:', error);
     }
+  };
+
+  const handleCreateCharger = async () => {
+    try {
+      const response = await axios.post('/api/admin/chargers', {
+        ...newCharger,
+        lat: parseFloat(newCharger.lat),
+        lng: parseFloat(newCharger.lng)
+      });
+      
+      setShowAddModal(false);
+      setNewCharger({
+        name: '',
+        displayName: '',
+        status: 'OFFLINE',
+        vendorId: '',
+        lat: '',
+        lng: '',
+        address: ''
+      });
+      await fetchChargers();
+      console.log('Charger created:', response.data.message);
+    } catch (error) {
+      console.error('Failed to create charger:', error);
+      alert(error.response?.data?.message || 'Failed to create charger');
+    }
+  };
+
+  const handleUpdateCharger = async () => {
+    try {
+      const response = await axios.put(`/api/admin/chargers/${editingCharger.id}`, {
+        ...editingCharger,
+        lat: parseFloat(editingCharger.lat),
+        lng: parseFloat(editingCharger.lng)
+      });
+      
+      setShowEditModal(false);
+      setEditingCharger(null);
+      await fetchChargers();
+      console.log('Charger updated:', response.data.message);
+    } catch (error) {
+      console.error('Failed to update charger:', error);
+      alert(error.response?.data?.message || 'Failed to update charger');
+    }
+  };
+
+  const handleDeleteCharger = async (chargerId) => {
+    if (!window.confirm('Are you sure you want to delete this charger? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      const response = await axios.delete(`/api/admin/chargers/${chargerId}`);
+      await fetchChargers();
+      console.log('Charger deleted:', response.data.message);
+    } catch (error) {
+      console.error('Failed to delete charger:', error);
+      alert(error.response?.data?.message || 'Failed to delete charger');
+    }
+  };
+
+  const openEditModal = (charger) => {
+    setEditingCharger({
+      ...charger,
+      lat: charger.lat?.toString() || '',
+      lng: charger.lng?.toString() || ''
+    });
+    setShowEditModal(true);
   };
 
   const filteredChargers = chargers.filter(charger => {

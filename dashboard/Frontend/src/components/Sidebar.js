@@ -9,9 +9,7 @@ import {
   Menu, 
   X,
   DollarSign,
-  Calendar,
   User,
-  FileText,
   CreditCard,
   TrendingUp,
   Bell
@@ -36,10 +34,8 @@ const Sidebar = () => {
     { path: '/admin/chargers', icon: Zap, label: 'Chargers' },
     { path: '/admin/vendors', icon: Users, label: 'Vendors' },
     { path: '/admin/users', icon: User, label: 'Users' },
-    { path: '/sessions', icon: Calendar, label: 'Sessions' },
     { path: '/payments', icon: CreditCard, label: 'Payments' },
     { path: '/payouts', icon: TrendingUp, label: 'Payouts' },
-    { path: '/reports', icon: FileText, label: 'Reports' },
     { path: '/notifications', icon: Bell, label: 'Notifications' },
     { path: '/settings', icon: Settings, label: 'Settings' },
   ];

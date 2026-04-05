@@ -26,17 +26,26 @@ const AdminUsers = () => {
 
   const toggleUserStatus = async (userId, currentStatus) => {
     try {
-      // This would need to be implemented in the backend
-      console.log('Toggle user status:', userId, !currentStatus);
+      const response = await axios.patch(`/api/admin/users/${userId}/status`, {
+        isActive: !currentStatus
+      });
       
-      // Update local state temporarily
+      // Update local state with server response
       setUsers(users.map(user => 
         user.id === userId 
           ? { ...user, isActive: !currentStatus }
           : user
       ));
+      
+      console.log('User status updated:', response.data.message);
     } catch (error) {
       console.error('Failed to toggle user status:', error);
+      // Revert state if API call fails
+      setUsers(users.map(user => 
+        user.id === userId 
+          ? { ...user, isActive: currentStatus }
+          : user
+      ));
     }
   };
 
