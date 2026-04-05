@@ -30,9 +30,11 @@
     "helmet": "^7.0.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.2.4",
+    "mqtt": "^5.15.1",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
-    "prisma": "^6.19.2"
+    "prisma": "^6.19.2",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

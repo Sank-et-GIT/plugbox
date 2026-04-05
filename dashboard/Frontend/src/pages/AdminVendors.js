@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, ToggleLeft, ToggleRight, Eye, Edit, Trash2, Users, DollarSign, Zap, Calendar, Plus, X } from 'lucide-react';
+import { Search, Filter, ToggleLeft, ToggleRight, Eye, Edit, Trash2, Users, DollarSign, Zap, Plus, X } from 'lucide-react';
 import axios from 'axios';
 
 const AdminVendors = () => {
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -23,24 +22,23 @@ const AdminVendors = () => {
 
   const fetchVendors = async () => {
     try {
-      const response = await axios.get('/api/admin/vendors');
+      const response = await axios.get('/api/admin/vendor-users');
       setVendors(response.data.vendors);
     } catch (error) {
       console.error('Failed to fetch vendors:', error);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
   const handleRefresh = async () => {
-    setRefreshing(true);
+    setLoading(true);
     await fetchVendors();
   };
 
   const handleCreateVendor = async () => {
     try {
-      const response = await axios.post('/api/admin/vendors', newVendor);
+      const response = await axios.post('/api/admin/vendor-users', newVendor);
       setShowAddModal(false);
       setNewVendor({
         name: '',
@@ -53,7 +51,7 @@ const AdminVendors = () => {
       console.log('Vendor created:', response.data.message);
     } catch (error) {
       console.error('Failed to create vendor:', error);
-      alert(error.response?.data?.message || 'Failed to create vendor');
+      alert(error.response?.data?.error || 'Failed to create vendor');
     }
   };
 
@@ -63,18 +61,18 @@ const AdminVendors = () => {
     }
     
     try {
-      const response = await axios.delete(`/api/admin/vendors/${vendorId}`);
+      const response = await axios.delete(`/api/admin/vendor-users/${vendorId}`);
       await fetchVendors();
       console.log('Vendor deleted:', response.data.message);
     } catch (error) {
       console.error('Failed to delete vendor:', error);
-      alert(error.response?.data?.message || 'Failed to delete vendor');
+      alert(error.response?.data?.error || 'Failed to delete vendor');
     }
   };
 
   const toggleVendorStatus = async (vendorId, currentStatus) => {
     try {
-      const response = await axios.patch(`/api/admin/vendors/${vendorId}/status`, {
+      const response = await axios.patch(`/api/admin/vendor-users/${vendorId}/status`, {
         isActive: !currentStatus
       });
       

@@ -25,6 +25,7 @@ import Notifications from './pages/Notifications';
 import Settings from './pages/Settings';
 import Earnings from './pages/Earnings';
 import Profile from './pages/Profile';
+import RealTimeDashboard from './pages/RealTimeDashboard';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -143,6 +144,14 @@ function App() {
                     <Profile />
                   </Layout>
                 </VendorRoute>
+              </ProtectedRoute>
+            } />
+            {/* Real-Time Dashboard */}
+            <Route path="/realtime" element={
+              <ProtectedRoute>
+                <Layout>
+                  <RealTimeDashboard />
+                </Layout>
               </ProtectedRoute>
             } />
             {/* Admin-only routes */}

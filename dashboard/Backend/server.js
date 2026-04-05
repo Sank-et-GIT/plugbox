@@ -4,6 +4,12 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const http = require("http");
+
+// MQTT and WebSocket imports
+const { connectMqtt, setMessageHandler } = require("./src/mqtt/mqttClient");
+const { initMqttHandler, handleMqttMessage } = require("./src/mqtt/mqttHandler");
+const { initializeSocket, broadcastEnergyReading } = require("./src/websocket/socketServer");
 
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/auth-prisma");
@@ -102,11 +108,24 @@ app.use((req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5002;
 
-app.listen(PORT, () => {
+// Create HTTP server for Socket.IO
+const server = http.createServer(app);
+
+// Initialize MQTT
+initMqttHandler(connectMqtt, connectMqtt, broadcastEnergyReading);
+setMessageHandler(handleMqttMessage);
+connectMqtt();
+
+// Initialize WebSocket
+initializeSocket(server);
+
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log('All modules are successfully working');
+  console.log('[MQTT] Connecting to Mosquitto broker...');
+  console.log('[WebSocket] Real-time updates enabled');
 });
 
 module.exports = app;

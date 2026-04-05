@@ -115,7 +115,6 @@ router.post("/vendor-users", async (req, res) => {
           phone,
           name: name || "",
           email: email || null,
-          password,
           firebaseUid: `vendor_${phone}_${Date.now()}`,
           role: "vendor",
           isActive: true,

@@ -12,7 +12,8 @@ import {
   User,
   CreditCard,
   TrendingUp,
-  Bell
+  Bell,
+  Activity
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -27,6 +28,7 @@ const Sidebar = () => {
     { path: '/vendor/chargers', icon: Zap, label: 'My Chargers' },
     { path: '/vendor/earnings', icon: DollarSign, label: 'Earnings' },
     { path: '/vendor/profile', icon: User, label: 'Profile' },
+    { path: '/realtime', icon: Activity, label: 'Real-Time' },
   ];
 
   const adminMenuItems = [
@@ -34,6 +36,7 @@ const Sidebar = () => {
     { path: '/admin/chargers', icon: Zap, label: 'Chargers' },
     { path: '/admin/vendors', icon: Users, label: 'Vendors' },
     { path: '/admin/users', icon: User, label: 'Users' },
+    { path: '/realtime', icon: Activity, label: 'Real-Time' },
     { path: '/payments', icon: CreditCard, label: 'Payments' },
     { path: '/payouts', icon: TrendingUp, label: 'Payouts' },
     { path: '/notifications', icon: Bell, label: 'Notifications' },
