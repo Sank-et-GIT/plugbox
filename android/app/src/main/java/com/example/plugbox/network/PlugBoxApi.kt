@@ -59,6 +59,10 @@ interface PlugBoxApi {
     @GET("/sessions/active/{userId}")
     suspend fun activeSession(@Path("userId") userId: String): ActiveSessionResponse
 
+    // Session history — past ENDED sessions
+    @GET("/sessions/history/{userId}")
+    suspend fun sessionHistory(@Path("userId") userId: String): SessionHistoryResponse
+
     // ── Auth ──────────────────────────────────────────────────────────────────
 
     // Firebase idToken → our JWT + userId

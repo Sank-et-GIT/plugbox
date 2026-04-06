@@ -112,7 +112,17 @@ fun ChargerDetailScreen(
 
     // Wallet: Phase 1 dummy, Phase 2 replace with real API value
     // Deposit NOT included in cost shown here — it's charged once at account opening
-    val walletBalance = 245
+    var walletBalance by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        try {
+            val userId = com.example.plugbox.network.ApiClient.getUserId(context)
+                ?: return@LaunchedEffect
+            val res = com.example.plugbox.network.ApiClient.api.getWallet(userId)
+            if (res.ok) walletBalance = res.balanceInr.toInt()
+        } catch (e: Exception) {
+            android.util.Log.e("ChargerDetail", "Wallet load failed: ${e.message}")
+        }
+    }
     val totalCost     = selectedPkg?.priceInr ?: 0
     val hasSufficient = walletBalance >= totalCost
 

@@ -191,3 +191,20 @@ data class FirebaseLoginResponse(
 
 data class UpdateNameRequest(val name: String)
 data class UpdateNameResponse(val ok: Boolean, val error: String? = null)
+
+// GET /sessions/history/:userId
+data class SessionHistoryItem(
+    val id:          Int,
+    val chargerName: String,
+    val packageName: String,
+    val usedKwh:     Double,
+    val usedInr:     Double,
+    val refundInr:   Double,
+    val durationMin: Int,
+    val endedAt:     String?
+)
+
+data class SessionHistoryResponse(
+    val ok:       Boolean,
+    val sessions: List<SessionHistoryItem> = emptyList()
+)

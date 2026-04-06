@@ -93,6 +93,15 @@ fun ProfileScreen(
 ) {
     val context = LocalContext.current
 
+    // Real user data from SharedPreferences (saved during login)
+    val prefs       = remember {
+        context.getSharedPreferences("plugbox_prefs", android.content.Context.MODE_PRIVATE)
+    }
+    val userName    = prefs.getString("user_name", "PlugBox User") ?: "PlugBox User"
+    val userPhone   = prefs.getString("user_phone", "") ?: ""
+    val memberSince = "Member since ${prefs.getString("member_since", "2024") ?: "2024"}"
+    val referralCode = "PB${(prefs.getString("user_id", "USER") ?: "USER").take(6).uppercase()}"
+
     // Notifications toggle state
     // Phase 2: persist to DataStore + register/unregister FCM
     var notificationsEnabled by remember { mutableStateOf(true) }
@@ -126,7 +135,10 @@ fun ProfileScreen(
             },
             confirmButton = {
                 Button(
-                    onClick = { showLogoutDialog = false; onLogout() },
+                    onClick = { showLogoutDialog = false;
+                        com.example.plugbox.network.ApiClient.logout(context)
+                              onLogout()
+                              },
                     colors  = ButtonDefaults.buttonColors(
                         containerColor = PcTextPrimary),
                     shape   = RoundedCornerShape(12.dp)
@@ -218,9 +230,9 @@ fun ProfileScreen(
 
         // ── 1. User info card ──────────────────────────────────────────────
         PcUserCard(
-            name        = DUMMY_NAME,
-            phone       = DUMMY_PHONE,
-            memberSince = DUMMY_MEMBER_SINCE,
+            name        = userName,
+            phone       = userPhone,
+            memberSince = memberSince,
             modifier    = Modifier.padding(horizontal = 16.dp)
         )
 
@@ -228,7 +240,7 @@ fun ProfileScreen(
 
         // ── 2. Referral card ───────────────────────────────────────────────
         PcReferralCard(
-            code      = DUMMY_REFERRAL,
+            code      =  referralCode,
             copied    = codeCopied,
             onCopy    = {
                 val clipboard = context.getSystemService(
