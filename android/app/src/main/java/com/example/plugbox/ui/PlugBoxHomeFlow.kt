@@ -40,7 +40,7 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
             } catch (e: Exception) {
                 Log.e(TAG, "Load chargers failed: ${e.message}", e)
             }
-            delay(10_000L)
+            delay(5_000L)
         }
     }
 
