@@ -7,12 +7,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import prisma from "../lib/prismaClient";
+import { log } from "../lib/logger";
 import { SessionStatus, WalletTxnType } from "@prisma/client";
 import { mqttPublish } from "../mqtt/mqttClient";
 
 
 
-const PLUG_WAIT_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+const PLUG_WAIT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes — matches hardware 2min timer + buffer
 
 export async function runSessionTimeout(): Promise<void> {
   const now = new Date();

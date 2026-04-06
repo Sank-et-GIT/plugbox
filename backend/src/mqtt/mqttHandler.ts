@@ -81,7 +81,27 @@ async function handleEnergyData(mqttTopic: string, payload: string): Promise<voi
     }
   }
 
-  if (data.status === "no_load") return;
+  // Check current even on no_load — relay may be ON but firmware still sends no_load
+  // If current is detected → session was charging, move to ACTIVE
+  if (data.status === "no_load") {
+    // Still check for current detection on PLUG_WAIT sessions
+    if (typeof data.current === "number" && data.current >= 0.05) {
+      const charger = await findCharger(mqttTopic);
+      if (!charger) return;
+      const plugWaitSession = await prisma.session.findFirst({
+        where: { chargerId: charger.id, status: SessionStatus.PLUG_WAIT },
+        orderBy: { createdAt: "desc" }
+      });
+      if (plugWaitSession) {
+        await prisma.session.update({
+          where: { id: plugWaitSession.id },
+          data:  { status: SessionStatus.ACTIVE, startedAt: new Date() }
+        });
+        log.mqtt("INFO", mqttTopic, `Session ${plugWaitSession.id} → ACTIVE from no_load current detect`);
+      }
+    }
+    return;
+  }
 
   if (
     typeof data.voltage   !== "number" ||
