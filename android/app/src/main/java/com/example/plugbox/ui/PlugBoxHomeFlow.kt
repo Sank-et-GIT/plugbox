@@ -7,6 +7,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.plugbox.network.ApiClient
 import com.example.plugbox.network.HoldRequest
 import com.example.plugbox.network.StartRequest
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val TAG = "PlugBoxFlow"
@@ -26,16 +27,20 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
     var chargers        by remember { mutableStateOf<List<UiCharger>>(emptyList()) }
     var filtered        by remember { mutableStateOf<List<UiCharger>>(emptyList()) }
 
-    // ── Load chargers on launch ───────────────────────────────────────────────
+    // ── Poll chargers every 10s — keeps status live ───────────────────────────
     LaunchedEffect(Unit) {
-        try {
-            val res    = ApiClient.api.chargers()
-            val mapped = res.chargers.map { it.toUiCharger() }
-            chargers = mapped
-            filtered = mapped
-            Log.d(TAG, "Loaded ${mapped.size} chargers")
-        } catch (e: Exception) {
-            Log.e(TAG, "Load chargers failed: ${e.message}", e)
+        while (true) {
+            try {
+                val res    = ApiClient.api.chargers()
+                val mapped = res.chargers.map { it.toUiCharger() }
+                chargers = mapped
+                // Only reset filtered if user hasn't searched
+                if (filtered.size == chargers.size) filtered = mapped
+                Log.d(TAG, "Chargers refreshed: ${mapped.size}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Load chargers failed: ${e.message}", e)
+            }
+            delay(10_000L)
         }
     }
 
