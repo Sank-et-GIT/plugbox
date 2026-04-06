@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-const OFFLINE_THRESHOLD_MS = 15 * 1000; // 15 seconds
+const OFFLINE_THRESHOLD_MS = 60 * 1000; // 15 seconds
 
 export function startOfflineChecker() {
   setInterval(async () => {

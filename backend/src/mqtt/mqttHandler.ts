@@ -67,7 +67,7 @@ async function handleEnergyData(mqttTopic: string, payload: string): Promise<voi
   // Throttled to once per 30s to avoid DB spam (data comes every 500ms)
   const now = Date.now();
   const lastUpdate = _lastOnlineUpdate.get(mqttTopic) ?? 0;
-  if (now - lastUpdate > 30_000) {
+  if (now - lastUpdate > 5_000) {
     _lastOnlineUpdate.set(mqttTopic, now);
     const chargerFromData = await findCharger(mqttTopic);
     if (chargerFromData) {
