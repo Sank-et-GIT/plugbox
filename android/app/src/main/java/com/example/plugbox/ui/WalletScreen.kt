@@ -32,6 +32,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import com.example.plugbox.network.ApiClient
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -92,7 +95,7 @@ data class WcTransaction(
 
 // Phase 1: dummy data
 // Phase 2: ApiClient.api.getTransactions(userId)
-private val dummyTransactions = listOf(
+private val transactions = listOf(
     WcTransaction("t1", WcTxnType.TOP_UP,           "Top-up",                 "Today, 9:45 AM",      "Today",     50),
     WcTransaction("t2", WcTxnType.DEPOSIT_LOCKED,   "Security deposit locked","Yesterday, 6:30 PM",  "Yesterday", 100),
     WcTransaction("t3", WcTxnType.SESSION_CHARGE,   "Charging session",       "Yesterday, 5:15 PM",  "Yesterday", 22),
@@ -103,8 +106,8 @@ private val dummyTransactions = listOf(
 )
 
 // Phase 1: hardcoded
-private const val DUMMY_BALANCE = 245
-private const val DUMMY_DEPOSIT = 100
+private const val walletBalance = 245
+private const val walletDeposit = 100
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION 3 — Main composable
@@ -120,10 +123,47 @@ fun WalletScreen(
     onChooseSmallerPkg:    () -> Unit = {},
     modifier:              Modifier   = Modifier
 ) {
+    val context    = androidx.compose.ui.platform.LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showSheet  by remember { mutableStateOf(showInsufficientSheet) }
 
-    // Withdraw confirmation dialog
+    // Real wallet state
+    var walletBalance  by remember { mutableIntStateOf(0) }
+    var walletDeposit  by remember { mutableIntStateOf(100) }
+    var transactions   by remember { mutableStateOf<List<WcTransaction>>(emptyList()) }
+
+    // Load real wallet on launch
+    LaunchedEffect(Unit) {
+        try {
+            val userId = com.example.plugbox.network.ApiClient.getUserId(context)
+                ?: return@LaunchedEffect
+            val res = com.example.plugbox.network.ApiClient.api.getWallet(userId)
+            if (res.ok) {
+                walletBalance = res.balanceInr.toInt()
+                walletDeposit = res.depositInr.toInt()
+                transactions  = res.transactions.map { t ->
+                    WcTransaction(
+                        id        = t.id,
+                        type      = when (t.type) {
+                            "TOPUP"           -> WcTxnType.TOP_UP
+                            "PACKAGE_DEBIT"   -> WcTxnType.SESSION_CHARGE
+                            "REFUND"          -> WcTxnType.REFUND
+                            "DEPOSIT_COLLECT" -> WcTxnType.DEPOSIT_LOCKED
+                            "DEPOSIT_REFUND"  -> WcTxnType.DEPOSIT_RELEASED
+                            else              -> WcTxnType.TOP_UP
+                        },
+                        title     = t.note ?: t.type,
+                        subtitle  = t.createdAt.take(16).replace("T", " "),
+                        dateGroup = "Recent",
+                        amountInr = t.amountInr.toInt()
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("WalletScreen", "Load wallet failed: ${e.message}")
+        }
+    }
+
     var showWithdrawDialog by remember { mutableStateOf(false) }
 
     if (showWithdrawDialog) {
@@ -141,8 +181,8 @@ fun WalletScreen(
             },
             text = {
                 Text(
-                    "₹$DUMMY_BALANCE will be transferred to your registered bank " +
-                            "account within 3–5 business days. Locked deposit ₹$DUMMY_DEPOSIT " +
+                    "₹$walletBalance will be transferred to your registered bank " +
+                            "account within 3–5 business days. Locked deposit ₹$walletDeposit " +
                             "cannot be withdrawn.",
                     fontSize = 14.sp, color = WcTextSecondary,
                     textAlign = TextAlign.Center, lineHeight = 22.sp
@@ -154,7 +194,7 @@ fun WalletScreen(
                     colors  = ButtonDefaults.buttonColors(containerColor = WcBlue),
                     shape   = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Withdraw ₹$DUMMY_BALANCE",
+                    Text("Withdraw ₹$walletBalance",
                         fontWeight = FontWeight.Bold, color = WcWhite)
                 }
             },
@@ -188,7 +228,7 @@ fun WalletScreen(
     // Each group = Pair(header label, list of transactions)
     val grouped: List<Pair<String, List<WcTransaction>>> = remember {
         listOf("Today", "Yesterday", "Earlier").mapNotNull { group ->
-            val txns = dummyTransactions.filter { it.dateGroup == group }
+            val txns = transactions.filter { it.dateGroup == group }
             if (txns.isNotEmpty()) group to txns else null
         }
     }
@@ -219,8 +259,8 @@ fun WalletScreen(
             // ── Balance hero card ──────────────────────────────────────────
             item {
                 WcBalanceCard(
-                    balance    = DUMMY_BALANCE,
-                    depositInr = DUMMY_DEPOSIT,
+                    balance    = walletBalance,
+                    depositInr = walletDeposit,
                     modifier   = Modifier.padding(horizontal = 16.dp)
                 )
             }
@@ -272,7 +312,7 @@ fun WalletScreen(
             }
 
             // ── Grouped transaction list ───────────────────────────────────
-            if (dummyTransactions.isEmpty()) {
+            if (transactions.isEmpty()) {
                 item { WcEmptyState() }
             } else {
                 grouped.forEach { (header, txns) ->

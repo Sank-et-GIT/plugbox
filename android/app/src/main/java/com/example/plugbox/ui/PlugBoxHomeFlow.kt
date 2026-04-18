@@ -7,6 +7,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.plugbox.network.ApiClient
 import com.example.plugbox.network.HoldRequest
 import com.example.plugbox.network.StartRequest
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val TAG = "PlugBoxFlow"
@@ -26,24 +27,28 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
     var chargers        by remember { mutableStateOf<List<UiCharger>>(emptyList()) }
     var filtered        by remember { mutableStateOf<List<UiCharger>>(emptyList()) }
 
-    // ── Load chargers on launch ───────────────────────────────────────────────
+    // ── Poll chargers every 10s — keeps status live ───────────────────────────
     LaunchedEffect(Unit) {
-        try {
-            val res    = ApiClient.api.chargers()
-            val mapped = res.chargers.map { it.toUiCharger() }
-            chargers = mapped
-            filtered = mapped
-            Log.d(TAG, "Loaded ${mapped.size} chargers")
-        } catch (e: Exception) {
-            Log.e(TAG, "Load chargers failed: ${e.message}", e)
+        while (true) {
+            try {
+                val res    = ApiClient.api.chargers()
+                val mapped = res.chargers.map { it.toUiCharger() }
+                chargers = mapped
+                // Only reset filtered if user hasn't searched
+                if (filtered.size == chargers.size) filtered = mapped
+                Log.d(TAG, "Chargers refreshed: ${mapped.size}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Load chargers failed: ${e.message}", e)
+            }
+            delay(5_000L)
         }
     }
 
     // ── Active session recovery on app launch ─────────────────────────────────
-    LaunchedEffect(Unit) launch@{
+    LaunchedEffect(Unit) {
         try {
             // getUserId returns null if not logged in — fall back to test user
-            val userId = ApiClient.getUserId(context) ?: return@launch
+            val userId = ApiClient.getUserId(context) ?: "rashi"
             val res    = ApiClient.api.activeSession(userId)
 
             if (res.active && res.sessionId != null) {
@@ -133,8 +138,8 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
                     selectedPackage = pkg
                     scope.launch {
                         try {
-                            // getUserId returns null → now i have hardcoded my uuid
-                            val userId = ApiClient.getUserId(context) ?: "955f1a7d-204b-4fc1-9645-24269439f348"
+                            // getUserId returns null → fall back to "rashi" for testing
+                            val userId = ApiClient.getUserId(context) ?: "rashi"
 
                             val res = ApiClient.api.hold(
                                 HoldRequest(
@@ -176,28 +181,10 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
                 charger         = sel,
                 pkg             = pkg,
                 onIveArrived    = {
-                    scope.launch {
-                        try {
-                            val userId = ApiClient.getUserId(context) ?: "955f1a7d-204b-4fc1-9645-24269439f348"
-
-                            val res = ApiClient.api.start(
-                                StartRequest(
-                                    chargerId = sel.id.toInt(),
-                                    userId    = userId
-                                )
-                            )
-
-                            if (res.ok && res.sessionId != null) {
-                                sessionId = res.sessionId
-                                Log.d(TAG, "Start OK → sessionId=${res.sessionId}")
-                                screen = Screen.SESSION
-                            } else {
-                                Log.e(TAG, "Start failed: ${res.error}")
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Start exception: ${e.message}", e)
-                        }
-                    }
+                    // Just navigate to SESSION screen
+                    // sessions/start is called inside SessionScreen when user taps Unlock Lid
+                    Log.d(TAG, "I've Arrived → SESSION screen")
+                    screen = Screen.SESSION
                 },
                 onCancelBooking = { resetAndGoHome() },
                 onTimerExpired  = { resetAndGoHome() }
@@ -210,11 +197,12 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
             val pkg = selectedPackage ?: run { screen = Screen.LIST; return }
 
             SessionScreen(
-                charger   = sel,
-                pkg       = pkg,
-                sessionId = sessionId,
-                onDone    = { resetAndGoHome() },
-                onCancel  = { resetAndGoHome() }
+                charger          = sel,
+                pkg              = pkg,
+                sessionId        = sessionId,
+                onSessionStarted = { id -> sessionId = id },
+                onDone           = { resetAndGoHome() },
+                onCancel         = { resetAndGoHome() }
             )
         }
     }

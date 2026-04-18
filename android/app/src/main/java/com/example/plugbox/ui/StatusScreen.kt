@@ -39,6 +39,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import com.example.plugbox.network.ApiClient
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -150,15 +153,57 @@ private val lifetimeCo2g = (lifetimeKwh * 120).toInt()
 
 @Composable
 fun StatusScreen(
-    onViewActiveSession: () -> Unit = {},  // → SessionScreen (charging)
-    onIveArrived:        () -> Unit = {},  // → SessionScreen (from booking card)
-    onCancelBooking:     () -> Unit = {},  // → HomeScreen
+    onViewActiveSession: () -> Unit = {},
+    onIveArrived:        () -> Unit = {},
+    onCancelBooking:     () -> Unit = {},
     modifier:            Modifier   = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope   = rememberCoroutineScope()
     var expandedId by remember { mutableStateOf<String?>(null) }
-
-    // Cancel booking confirmation dialog
     var showCancelDialog by remember { mutableStateOf(false) }
+
+    // Real data state
+    var activeBooking  by remember { mutableStateOf<StActiveBooking?>(null) }
+    var activeSession  by remember { mutableStateOf<StActiveSession?>(null) }
+
+    // Load real active booking/session on launch
+    LaunchedEffect(Unit) {
+        try {
+            val userId = com.example.plugbox.network.ApiClient.getUserId(context)
+                ?: return@LaunchedEffect
+            val res = com.example.plugbox.network.ApiClient.api.activeSession(userId)
+            if (res.active && res.sessionId != null) {
+                when (res.status) {
+                    "CREATED", "UNLOCK_SENT", "UNLOCKED", "PLUG_WAIT" -> {
+                        // Has booking but not charging yet
+                        activeBooking = StActiveBooking(
+                            chargerName = res.chargerName ?: "PlugBox Charger",
+                            packageName = res.packageName ?: "Standard",
+                            packageInr  = (res.packagePaise ?: 4000) / 100,
+                            secondsLeft = 600
+                        )
+                    }
+                    "ACTIVE" -> {
+                        activeSession = StActiveSession(
+                            chargerName = res.chargerName ?: "PlugBox Charger",
+                            usedKwh     = 0.0,
+                            usedInr     = 0,
+                            etaMinutes  = 0,
+                            progress    = 0f
+                        )
+                        activeBooking = null
+                    }
+                    else -> {
+                        activeBooking = null
+                        activeSession = null
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("StatusScreen", "Load active session failed: ${e.message}")
+        }
+    }
 
     if (showCancelDialog) {
         AlertDialog(
@@ -200,9 +245,40 @@ fun StatusScreen(
         )
     }
 
-    val grouped: List<Pair<String, List<StSession>>> = remember {
-        listOf("Today", "Yesterday", "Earlier").mapNotNull { group ->
-            val sessions = dummySessions.filter { it.dateGroup == group }
+    // Real past sessions
+    var pastSessions by remember { mutableStateOf<List<StSession>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        try {
+            val userId = com.example.plugbox.network.ApiClient.getUserId(context)
+                ?: return@LaunchedEffect
+            val res = com.example.plugbox.network.ApiClient.api.sessionHistory(userId)
+            if (res.ok) {
+                pastSessions = res.sessions.map { s ->
+                    StSession(
+                        id          = s.id.toString(),
+                        chargerName = s.chargerName,
+                        dateGroup   = "Recent",
+                        dateLabel   = s.endedAt?.take(16)?.replace("T", " ") ?: "",
+                        durationMin = s.durationMin,
+                        usedKwh     = s.usedKwh,
+                        usedInr     = s.usedInr.toInt(),
+                        refundInr   = s.refundInr.toInt()
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("StatusScreen", "History failed: ${e.message}")
+        }
+    }
+
+    val lifetimeKwh  = pastSessions.sumOf { it.usedKwh }
+    val lifetimeInr  = pastSessions.sumOf { it.usedInr }
+    val lifetimeCo2g = (lifetimeKwh * 120).toInt()
+
+    val grouped: List<Pair<String, List<StSession>>> = remember(pastSessions) {
+        listOf("Recent").mapNotNull { group ->
+            val sessions = pastSessions.filter { it.dateGroup == group }
             if (sessions.isNotEmpty()) group to sessions else null
         }
     }
@@ -231,9 +307,7 @@ fun StatusScreen(
             }
 
             // ── Active BOOKING card ────────────────────────────────────────
-            // Shown when user booked + closed app + reopened
-            // Orange — "you have something to do" urgency
-            dummyActiveBooking?.let { booking ->
+            activeBooking?.let { booking ->
                 item {
                     StActiveBookingCard(
                         booking        = booking,
@@ -246,9 +320,7 @@ fun StatusScreen(
             }
 
             // ── Active SESSION card ────────────────────────────────────────
-            // Shown when charging is in progress
-            // Green — "everything is working"
-            dummyActiveSession?.let { session ->
+            activeSession?.let { session ->
                 item {
                     StActiveSessionCard(
                         session  = session,
@@ -260,7 +332,7 @@ fun StatusScreen(
             }
 
             // Lifetime stats
-            if (dummySessions.isNotEmpty()) {
+            if (pastSessions.isNotEmpty()) {
                 item {
                     StLifetimeStats(
                         totalKwh = lifetimeKwh,
@@ -273,7 +345,7 @@ fun StatusScreen(
             }
 
             // Past sessions heading
-            if (dummySessions.isNotEmpty()) {
+            if (pastSessions.isNotEmpty()) {
                 item {
                     Text("Past Sessions", fontSize = 17.sp,
                         fontWeight = FontWeight.Bold, color = StTextPrimary,
@@ -303,7 +375,7 @@ fun StatusScreen(
                     }
                 }
 
-            } else if (dummyActiveBooking == null && dummyActiveSession == null) {
+            } else if (activeBooking == null && activeSession == null) {
                 item { StEmptyState() }
             }
         }

@@ -140,18 +140,21 @@ private fun distanceMeters(
 @SuppressLint("MissingPermission", "DefaultLocale")
 @Composable
 fun SessionScreen(
-    charger:      UiCharger,
-    pkg:          UiPackage,
-    sessionId:    Int   = 0,
-    onDone:       () -> Unit,
-    onCancel:     () -> Unit,
-    modifier:     Modifier = Modifier
+    charger:          UiCharger,
+    pkg:              UiPackage,
+    sessionId:        Int   = 0,
+    onSessionStarted: (Int) -> Unit = {},  // called with real sessionId after unlock
+    onDone:           () -> Unit,
+    onCancel:         () -> Unit,
+    modifier:         Modifier = Modifier
 ) {
     val context = LocalContext.current
     val scope   = rememberCoroutineScope()
 
     // ── Stage state ───────────────────────────────────────────────────────────
-    var stage by remember { mutableStateOf(Stage.GRACE) }
+    var stage           by remember { mutableStateOf(Stage.GRACE) }
+    // Local sessionId — starts from param, updated when start API returns real ID
+    var activeSessionId by remember { mutableIntStateOf(sessionId) }
 
     // ── GPS ───────────────────────────────────────────────────────────────────
     var userLocation    by remember { mutableStateOf<Location?>(null) }
@@ -200,9 +203,24 @@ fun SessionScreen(
     LaunchedEffect(stage) {
         if (stage != Stage.LID_OPEN) return@LaunchedEffect
         plugInSecondsLeft = PLUG_IN_TIMEOUT_S
-        while (plugInSecondsLeft > 0) {
-            delay(1_000L)
-            plugInSecondsLeft--
+        // Poll backend every 3s to detect when session becomes ACTIVE
+        // (hardware presses button + closes lid → backend sets ACTIVE)
+        while (plugInSecondsLeft > 0 && stage == Stage.LID_OPEN) {
+            delay(3_000L)
+            plugInSecondsLeft = (plugInSecondsLeft - 3).coerceAtLeast(0)
+            try {
+                if (sessionId > 0) {
+                    val meter = ApiClient.api.meter(sessionId)
+                    if (meter.ok && meter.status == "ACTIVE") {
+                        stage = Stage.CHARGING
+                        return@LaunchedEffect
+                    }
+                    if (meter.ok && meter.status == "FAILED") {
+                        stage = Stage.COMPLETE
+                        return@LaunchedEffect
+                    }
+                }
+            } catch (_: Exception) { }
         }
         if (stage == Stage.LID_OPEN) stage = Stage.COMPLETE
     }
@@ -226,8 +244,8 @@ fun SessionScreen(
         while (stage == Stage.CHARGING) {
             delay(POLL_INTERVAL_MS)
             try {
-                if (sessionId > 0) {
-                    val reading = ApiClient.api.meter(sessionId)
+                if (activeSessionId > 0) {
+                    val reading = ApiClient.api.meter(activeSessionId)
                     if (reading.ok) {
                         usedKwh = reading.usedKwh
                         usedInr = (reading.usedKwh * ratePerKwh).roundToInt()
@@ -300,7 +318,7 @@ fun SessionScreen(
                             try {
                                 if (sessionId > 0) {
                                     ApiClient.api.stop(
-                                        com.example.plugbox.network.StopRequest(sessionId)
+                                        com.example.plugbox.network.StopRequest(activeSessionId)
                                     )
                                 }
                             } catch (e: Exception) {
@@ -414,8 +432,34 @@ fun SessionScreen(
                     distanceMeters = distanceToCharger,
                     withinRange    = withinRange,
                     onUnlockLid    = {
-                        // TODO Phase 2: ApiClient.api.unlockLid(sessionId)
-                        stage = Stage.LID_OPEN
+                        // Call sessions/start → SOLENOID_UNLOCK sent to hardware
+                        scope.launch {
+                            try {
+                                val userId = ApiClient.getUserId(context)
+                                    ?: return@launch
+                                val res = ApiClient.api.start(
+                                    com.example.plugbox.network.StartRequest(
+                                        chargerId = charger.id.toInt(),
+                                        userId    = userId
+                                    )
+                                )
+                                if (res.ok && res.sessionId != null) {
+                                    activeSessionId = res.sessionId
+                                    onSessionStarted(res.sessionId)
+                                    android.util.Log.d("SessionScreen",
+                                        "Start OK sessionId=${res.sessionId}")
+                                    stage = Stage.LID_OPEN
+                                } else {
+                                    android.util.Log.e("SessionScreen",
+                                        "Start failed: ${res.error}")
+                                }
+                            } catch (e: Exception) {
+                                android.util.Log.e("SessionScreen",
+                                    "Start exception: ${e.message}")
+                                // Still advance to show lid open UI
+                                stage = Stage.LID_OPEN
+                            }
+                        }
                     }
                 )
 
