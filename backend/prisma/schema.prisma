@@ -1,13 +1,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// schema.prisma — PlugBox v2 Final Schema (Bug-fixed version)
+// schema.prisma — PlugBox v2
 //
-// Fixes from review:
-//   1. WalletTransaction now has proper @relation to Session + Booking
-//   2. Session has plugWaitStartedAt field (for accurate 3min timeout)
-//   3. Back-relations added to Session + Booking for WalletTransaction
+// Changes in this version:
+//   1. Session.kwhAtStart (Float?) — stores PZEM counter when session → ACTIVE
+//      Billing delta = kwhAtStop - kwhAtStart (protects against RESET_ENERGY
+//      timing issues between sessions)
+//   2. BookingStatus.FAILED — set when a session fails so booking records are
+//      consistent and can be queried/filtered properly
 //
-// Run migration:
-//   npx prisma migrate dev --name v2_complete
+// Migration:
+//   npx prisma migrate dev --name add_kwh_at_start_booking_failed
+//   npx prisma generate
 // ─────────────────────────────────────────────────────────────────────────────
 
 datasource db {
@@ -59,7 +62,6 @@ model Wallet {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WalletTransaction
-// FIX: proper @relation to Session and Booking added
 // ─────────────────────────────────────────────────────────────────────────────
 enum WalletTxnType {
   TOPUP
@@ -134,13 +136,19 @@ model Charger {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Booking
-// FIX: walletTransactions back-relation added
+//
+// Status flow:
+//   HOLD → STARTED (when session begins)
+//        → EXPIRED (booking window passed)
+//        → CANCELLED (user cancelled)
+//        → FAILED   (session failed — door timeout, emergency, reboot, etc.)
 // ─────────────────────────────────────────────────────────────────────────────
 enum BookingStatus {
   HOLD
   EXPIRED
   CANCELLED
   STARTED
+  FAILED   // NEW: session failed — refund issued, booking closed
 }
 
 model Booking {
@@ -168,8 +176,17 @@ model Booking {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Session
-// FIX 1: walletTransactions back-relation added
-// FIX 2: plugWaitStartedAt added (for accurate 3min timeout — not fragile)
+//
+// Status machine:
+//   CREATED → UNLOCK_SENT → PLUG_WAIT → ACTIVE → ENDED
+//                                              → FAILED
+//
+// kwhAtStart: PZEM cumulative counter value at the moment session → ACTIVE.
+//   Stored so billing uses a delta (kwhAtStop - kwhAtStart) rather than the
+//   raw PZEM counter, which protects against RESET_ENERGY timing issues.
+//
+// plugWaitStartedAt: set once when session enters PLUG_WAIT. Used by the
+//   sessionTimeout job for an accurate 5-minute timer.
 // ─────────────────────────────────────────────────────────────────────────────
 enum SessionStatus {
   CREATED
@@ -188,10 +205,11 @@ model Session {
   bookingId         Int
   status            SessionStatus @default(CREATED)
   buttonAttempts    Int           @default(0)
-  finalKwh          Float?
+  kwhAtStart        Float?        // NEW: PZEM counter snapshot when → ACTIVE
+  finalKwh          Float?        // delta kWh used = finalKwh - kwhAtStart
   startedAt         DateTime?
   endedAt           DateTime?
-  plugWaitStartedAt DateTime?     // FIX: set when status → PLUG_WAIT, used for 3min timeout
+  plugWaitStartedAt DateTime?     // set once on → PLUG_WAIT, used for 5min timeout
   walletTxnId       String?
   refundTxnId       String?
   createdAt         DateTime      @default(now())
@@ -211,7 +229,7 @@ model Session {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DeviceCommand
+// DeviceCommand — audit trail for all commands sent to hardware
 // ─────────────────────────────────────────────────────────────────────────────
 enum CommandType {
   UNLOCK
@@ -241,7 +259,7 @@ model DeviceCommand {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EnergyReading
+// EnergyReading — raw PZEM-004T telemetry, stored every ~500ms during session
 // ─────────────────────────────────────────────────────────────────────────────
 model EnergyReading {
   id          Int      @id @default(autoincrement())
