@@ -157,6 +157,7 @@ data class MeterResponse(
     val etaMinutes:          Int     = 0,
     val usedInr:             Double  = 0.0,
     val refundInr:           Double  = 0.0,
+    val noLoad:              Boolean = false, // true = plug removed (no PZEM reading for >3s)
     val error:               String? = null
 )
 

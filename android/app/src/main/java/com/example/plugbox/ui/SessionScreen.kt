@@ -159,8 +159,10 @@ fun SessionScreen(
     val scope   = rememberCoroutineScope()
 
     // ── Stage state ───────────────────────────────────────────────────────────
-    var stage           by remember { mutableStateOf(Stage.GRACE) }
-    // Local sessionId — starts from param, updated when start API returns real ID
+    // If sessionId > 0 on entry (start API already called from I've Arrived),
+    // skip GRACE entirely and go straight to LID_OPEN — door is already unlocked.
+    // LaunchedEffect below will further advance to CHARGING if already ACTIVE.
+    var stage           by remember { mutableStateOf(if (sessionId > 0) Stage.LID_OPEN else Stage.GRACE) }
     var activeSessionId by remember { mutableIntStateOf(sessionId) }
 
     // If we enter with an existing sessionId (restored from active session API),
@@ -251,15 +253,26 @@ fun SessionScreen(
     }
 
     // ── Live meter (CHARGING stage) ───────────────────────────────────────────
-    // displayKwh  = what the UI shows — increments every second
-    // realKwh     = last confirmed value from backend API
-    // The 1s ticker estimates forward from realKwh using power draw.
-    // Every 3s the API poll snaps realKwh to the authoritative backend value.
-    // This gives a continuously moving bar with accurate totals.
-    var realKwh    by remember { mutableDoubleStateOf(0.0) }
-    var displayKwh by remember { mutableDoubleStateOf(0.0) }
+    // displayKwh       = what UI shows — interpolates every 1s
+    // realKwh          = last confirmed PZEM value from backend
+    // realKwhPrev      = realKwh from previous poll cycle
+    // noAdvanceCount   = consecutive polls with no kWh advancement
+    // energyFlowing    = true until 2 consecutive polls show no change
+    //
+    // WHY start true + require 2 polls:
+    //   At session start, PZEM usedKwh = 0.000. First poll: newKwh=0, prev=0,
+    //   delta=0 → if we set false immediately, bar never starts. PZEM resolution
+    //   is 0.01 kWh — it takes ~30-40s to accumulate the first tick. We must
+    //   allow the bar to run forward during that window.
+    //   After 2 consecutive no-advance polls (6s gap) we are confident
+    //   the plug is actually out and billing should stop.
+    var realKwh        by remember { mutableDoubleStateOf(0.0) }
+    var realKwhPrev    by remember { mutableDoubleStateOf(-1.0) } // -1 = no data yet
+    var displayKwh     by remember { mutableDoubleStateOf(0.0) }
+    var noAdvanceCount by remember { mutableIntStateOf(0) }
+    // Start true — assume energy is flowing until 2 consecutive polls prove otherwise
+    var energyFlowing  by remember { mutableStateOf(true) }
 
-    // Derive billing from displayKwh so numbers update every second too
     val ratePerKwh   = pkg.priceInr.toDouble() / pkg.kwhLimit
     val usedKwh      = displayKwh
     val usedInr      = (displayKwh * ratePerKwh).roundToInt()
@@ -271,25 +284,51 @@ fun SessionScreen(
     val etaMinutes = if (remainingKwh > 0)
         ((remainingKwh / powerKw) * 60).toInt().coerceAtLeast(1) else 0
 
-    // ── 1s display ticker — continuous forward interpolation ─────────────────
-    // Increments displayKwh every second by (powerKw / 3600) kWh.
-    // Snaps to realKwh when realKwh is ahead (after each API poll).
-    // Stops incrementing past kwhLimit to avoid over-reporting.
+    // ── 1s display ticker ────────────────────────────────────────────────────
+    // While energyFlowing: interpolates forward every second (smooth bar).
+    // When energyFlowing = false: HOLDS at current value — does NOT snap to 0.
+    //
+    // WHY not snap to 0:
+    //   After door_closed, kwhAtStart is updated to current PZEM value so
+    //   usedKwh resets to 0 from the API. But the PZEM hasn't actually stopped —
+    //   it just needs ~40s to accumulate the next 0.01 kWh tick above the new
+    //   kwhAtStart. Snapping displayKwh to 0 here would visually reset the bar.
+    //   Instead we HOLD the bar at its current estimated position and wait for
+    //   the next real PZEM tick to arrive before resuming forward movement.
     LaunchedEffect(stage) {
         if (stage != Stage.CHARGING) return@LaunchedEffect
         val kwhPerSecond = powerKw / 3600.0
         while (stage == Stage.CHARGING) {
             delay(1_000L)
-            val estimated = (displayKwh + kwhPerSecond).coerceAtMost(pkg.kwhLimit)
-            // Use whichever is larger — real reading or estimated
-            displayKwh = maxOf(estimated, realKwh).coerceAtMost(pkg.kwhLimit)
-            if (displayKwh >= pkg.kwhLimit) stage = Stage.COMPLETE
+            if (energyFlowing) {
+                val estimated = (displayKwh + kwhPerSecond).coerceAtMost(pkg.kwhLimit)
+                displayKwh = maxOf(estimated, realKwh).coerceAtMost(pkg.kwhLimit)
+            }
+            // energyFlowing = false → do nothing (hold current displayKwh value)
+            // The 3s poll will snap forward when real kWh arrives
+            if (displayKwh >= pkg.kwhLimit) {
+                if (activeSessionId > 0) {
+                    try {
+                        ApiClient.api.stop(
+                            com.example.plugbox.network.StopRequest(activeSessionId)
+                        )
+                    } catch (e: Exception) {
+                        android.util.Log.e("SessionScreen", "Auto-stop failed: ${e.message}")
+                    }
+                }
+                stage = Stage.COMPLETE
+            }
         }
     }
 
-    // ── 3s API poll — authoritative kWh sync from backend ────────────────────
-    // Updates realKwh with confirmed PZEM reading.
-    // displayKwh snaps to realKwh on the next 1s tick.
+    // ── 3s API poll — authoritative PZEM sync ────────────────────────────────
+    // noAdvanceCount threshold = 20 polls = 60 seconds.
+    //
+    // WHY 60 seconds:
+    //   PZEM-004T resolution is 0.01 kWh. At ~900W load, one tick takes ~40s.
+    //   A threshold of 2 polls (6s) declared energyFlowing=false mid-tick,
+    //   even while energy was genuinely flowing. 60s guarantees at least one
+    //   full PZEM tick has been missed before we declare the plug as removed.
     LaunchedEffect(stage) {
         if (stage != Stage.CHARGING) return@LaunchedEffect
         while (stage == Stage.CHARGING) {
@@ -297,10 +336,42 @@ fun SessionScreen(
                 if (activeSessionId > 0) {
                     val reading = ApiClient.api.meter(activeSessionId)
                     if (reading.ok) {
-                        realKwh = reading.usedKwh
-                        // Snap display forward if real reading is ahead
-                        if (reading.usedKwh > displayKwh) displayKwh = reading.usedKwh
-                        if (reading.status == "ENDED") stage = Stage.COMPLETE
+                        val newKwh = reading.usedKwh
+
+                        when {
+                            reading.noLoad -> {
+                                // Backend confirmed no PZEM reading for >3s = plug removed.
+                                // Freeze billing instantly — no need to wait 60s.
+                                energyFlowing  = false
+                                noAdvanceCount = 20 // skip the slow-path threshold
+                                android.util.Log.d("SessionScreen", "noLoad=true → billing frozen")
+                            }
+                            realKwhPrev < 0.0 -> {
+                                // First poll — no comparison yet, assume flowing
+                                noAdvanceCount = 0
+                            }
+                            (newKwh - realKwhPrev) > 0.0001 -> {
+                                // kWh advanced — energy is definitely flowing
+                                noAdvanceCount = 0
+                                energyFlowing  = true
+                            }
+                            else -> {
+                                noAdvanceCount++
+                                // 60s fallback: declare not-flowing if no tick for 20 polls
+                                // At 150W, PZEM ticks every ~240s (80 polls × 3s).
+                                // Old threshold of 20 (60s) froze bar before first tick.
+                                if (noAdvanceCount >= 80) energyFlowing = false
+                            }
+                        }
+
+                        realKwhPrev = realKwh
+                        realKwh     = newKwh
+                        if (newKwh > displayKwh) displayKwh = newKwh
+
+                        if (reading.status == "ENDED" || reading.status == "FAILED") {
+                            displayKwh = newKwh
+                            stage = Stage.COMPLETE
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -309,9 +380,6 @@ fun SessionScreen(
             delay(POLL_INTERVAL_MS)
         }
     }
-
-    // No animateFloatAsState needed — displayKwh already ticks every 1s smoothly
-
 
     // Refund = unused amount (shown on stop dialog + receipt)
     val refundInr = (pkg.priceInr - usedInr).coerceAtLeast(0)
@@ -365,10 +433,13 @@ fun SessionScreen(
                         showStopDialog = false
                         scope.launch {
                             try {
-                                if (sessionId > 0) {
+                                // FIX: use activeSessionId (set after unlock API returns),
+                                // not sessionId (constructor param — always 0 for fresh sessions)
+                                if (activeSessionId > 0) {
                                     ApiClient.api.stop(
                                         com.example.plugbox.network.StopRequest(activeSessionId)
                                     )
+                                    // Backend now sends RELAY_OFF + SOLENOID_UNLOCK to hardware
                                 }
                             } catch (e: Exception) {
                                 android.util.Log.e("SessionScreen", "Stop failed: ${e.message}")
@@ -577,7 +648,7 @@ private fun SsHeader(charger: UiCharger, stage: Stage) {
     }
     val stageLabel = when (stage) {
         Stage.GRACE    -> "Walk to charger"
-        Stage.LID_OPEN -> "Plug in cable"
+        Stage.LID_OPEN -> "Plug in & close door"
         Stage.CHARGING -> "Charging"
         Stage.COMPLETE -> "Session complete"
     }

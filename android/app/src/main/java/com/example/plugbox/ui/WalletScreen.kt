@@ -45,8 +45,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.text.SimpleDateFormat
-import java.util.*
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION 1 — Colors
@@ -143,12 +141,21 @@ fun WalletScreen(
             if (res.ok) {
                 walletBalance = res.balanceInr.toInt()
                 walletDeposit = res.depositInr.toInt()
-                val calendar = Calendar.getInstance()
-                val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                val today = dateFormat.format(calendar.time)
-                calendar.add(Calendar.DAY_OF_YEAR, -1)
-                val yesterday = dateFormat.format(calendar.time)
-                transactions  = res.transactions.map { t ->
+                val sdfDisplay = java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.getDefault())
+                val sdfDate    = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                val todayStr     = sdfDate.format(java.util.Date())
+                val cal          = java.util.Calendar.getInstance()
+                cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
+                val yesterdayStr = sdfDate.format(cal.time)
+
+                transactions = res.transactions.map { t ->
+                    // Parse UTC ISO timestamp and convert to local time (IST)
+                    val isoParser = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.getDefault())
+                    isoParser.timeZone = java.util.TimeZone.getTimeZone("UTC")
+                    val date = try { isoParser.parse(t.createdAt.toString()) } catch (_: Exception) { java.util.Date() }
+                    val localSubtitle  = sdfDisplay.format(date ?: java.util.Date())
+                    val localDateStr   = sdfDate.format(date ?: java.util.Date())
+
                     WcTransaction(
                         id        = t.id,
                         type      = when (t.type) {
@@ -167,13 +174,11 @@ fun WalletScreen(
                             "DEPOSIT_REFUND"  -> "Deposit released"
                             else              -> t.type
                         },
-                        subtitle  = t.createdAt.take(16).replace("T", " "),
-                        // FIX: was always "Recent" — now properly categorised so
-                        // the grouped display can find them under the right header
-                        dateGroup = when {
-                            t.createdAt.startsWith(today)     -> "Today"
-                            t.createdAt.startsWith(yesterday) -> "Yesterday"
-                            else                              -> "Earlier"
+                        subtitle  = localSubtitle,   // "19 Apr, 2:22 PM" in IST
+                        dateGroup = when (localDateStr) {
+                            todayStr     -> "Today"
+                            yesterdayStr -> "Yesterday"
+                            else         -> "Earlier"
                         },
                         amountInr = t.amountInr.toInt()
                     )

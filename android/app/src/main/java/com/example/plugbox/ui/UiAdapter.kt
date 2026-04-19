@@ -35,24 +35,23 @@ private val defaultPackages = listOf(
     UiPackage(
         id       = "pkg_mini",
         name     = "Mini",
-        kwhLimit = 0.02, // ~2 min at 870W
+        kwhLimit = 0.005,   // ~2 min at 150W
         priceInr = 10
     ),
     UiPackage(
         id       = "pkg_standard",
         name     = "Standard",
-        kwhLimit = 0.05,
+        kwhLimit = 0.0075,  // ~3 min at 150W
         priceInr = 20,
-        badge    = "Best value"   // auto-selected on ChargerDetailScreen
+        badge    = "Best value"
     ),
     UiPackage(
         id       = "pkg_plus",
         name     = "Plus",
-        kwhLimit = 0.08,
+        kwhLimit = 0.0125,  // ~5 min at 150W
         priceInr = 30
     )
 )
-
 // ── Last seen label ───────────────────────────────────────────────────────────
 private fun lastSeenLabel(secondsAgo: Long?): String =
     secondsAgo?.let { secs ->
@@ -72,7 +71,7 @@ fun Charger.toUiCharger(): UiCharger {
         address          = lastSeenLabel(lastSeenSecondsAgo),
         distanceKm       = 0.0,          // filled by HomeScreen GPS
         etaMin           = 0,            // calculated in ChargerDetailScreen
-        powerKw          = 1.5,
+        powerKw          = 0.15,  // actual charger draw ~150W
         socketsAvailable = if (uiStatus == ChargerStatus.IDLE) 1 else 0,
         socketsTotal     = 1,
         status           = uiStatus,

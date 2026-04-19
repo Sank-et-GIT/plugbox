@@ -13,7 +13,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import prisma from "../lib/prismaClient";
-import { log }  from "../lib/logger";
 import { Router, Request, Response } from "express";
 import {
   BookingStatus,
@@ -146,9 +145,7 @@ router.post("/start", async (req: Request, res: Response) => {
       },
     });
 
-    log.session("INFO", chargerId, userId, session.id, {
-      msg: `Session started — booking ${activeHold.id}, solenoid unlocked`,
-    });
+    console.log(`[SESSION] Session ${session.id} started — booking ${activeHold.id}, solenoid unlocked`);
 
     return res.status(201).json({
       ok:        true,
@@ -260,9 +257,7 @@ router.post("/stop", async (req: Request, res: Response) => {
     mqttPublish(`${topic}/door`,    "SOLENOID_UNLOCK"); // unlock so user can retrieve cable
     mqttPublish(`${topic}/command`, "RESET_ENERGY");    // reset PZEM for next session
 
-    log.session("INFO", session.chargerId, session.userId, sessionId, {
-      msg: `Session stopped — kWh=${finalKwh.toFixed(3)} used=₹${usedPaise / 100} refund=₹${refundPaise / 100}`,
-    });
+    console.log(`[SESSION] Session ${sessionId} stopped — kWh=${finalKwh.toFixed(3)} used=₹${usedPaise / 100} refund=₹${refundPaise / 100}`);
 
     return res.json({
       ok:         true,
@@ -325,6 +320,16 @@ router.get("/meter/:sessionId", async (req: Request, res: Response) => {
     const kwhAtStart = session.kwhAtStart ?? 0;
     const usedKwh    = Math.max(0, rawKwh - kwhAtStart); // delta from billing baseline
 
+    // noLoad: true when PZEM hasn't sent a reading in the last 3 seconds.
+    // During charging, readings arrive every 500ms. If the last reading is
+    // older than 3 seconds, the firmware has gone no_load (plug removed).
+    // The app uses this for instant plug-removal detection instead of waiting
+    // 60 seconds for the kWh counter to stop advancing.
+    const secondsSinceReading = latest
+      ? (Date.now() - new Date(latest.createdAt).getTime()) / 1000
+      : 999;
+    const noLoad = secondsSinceReading > 3;
+
     const packagePaise = session.booking.packagePaise;
     const kwhLimit     = session.booking.kwhLimit;
     const ratePerKwh   = packagePaise / kwhLimit;
@@ -350,6 +355,7 @@ router.get("/meter/:sessionId", async (req: Request, res: Response) => {
       etaMinutes:          Math.max(0, etaMinutes),
       usedInr:             usedPaise   / 100,
       refundInr:           refundPaise / 100,
+      noLoad,              // true = plug removed, app should freeze billing instantly
     });
 
   } catch (err) {

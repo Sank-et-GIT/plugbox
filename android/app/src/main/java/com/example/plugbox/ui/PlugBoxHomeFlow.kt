@@ -27,6 +27,11 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
     var chargers        by remember { mutableStateOf<List<UiCharger>>(emptyList()) }
     var filtered        by remember { mutableStateOf<List<UiCharger>>(emptyList()) }
 
+    // Guard against rapid double-taps or recomposition-triggered duplicate holds.
+    // While a /bookings/hold API call is in flight, all subsequent onProceedToPay
+    // calls are ignored. Reset to false on success, failure, and going home.
+    var isHoldPending   by remember { mutableStateOf(false) }
+
     // ── Poll chargers every 10s — keeps status live ───────────────────────────
     LaunchedEffect(Unit) {
         while (true) {
@@ -100,6 +105,7 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
     fun resetAndGoHome() {
         selectedPackage = null
         sessionId       = 0
+        isHoldPending   = false  // reset so next booking attempt works
         screen          = Screen.LIST
     }
 
@@ -135,15 +141,20 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
                 onBack         = { screen = Screen.LIST },
                 onNavigate     = { },
                 onProceedToPay = { pkg ->
+                    // Ignore if a hold request is already in flight
+                    if (isHoldPending) {
+                        Log.d(TAG, "Hold already pending — ignoring duplicate tap")
+                        return@ChargerDetailScreen
+                    }
+                    isHoldPending   = true
                     selectedPackage = pkg
                     scope.launch {
                         try {
-                            // getUserId returns null → fall back to "rashi" for testing
                             val userId = ApiClient.getUserId(context) ?: "rashi"
 
                             val res = ApiClient.api.hold(
                                 HoldRequest(
-                                    chargerId    = sel.id.toInt(), // UiCharger.id is String
+                                    chargerId    = sel.id.toInt(),
                                     userId       = userId,
                                     packageName  = pkg.name,
                                     packagePaise = pkg.priceInr * 100,
@@ -155,17 +166,22 @@ fun PlugBoxHost(modifier: Modifier = Modifier) {
                                 res.ok -> {
                                     Log.d(TAG, "Hold OK → bookingId=${res.bookingId}")
                                     screen = Screen.CONFIRMED
+                                    // Keep isHoldPending = true while on CONFIRMED screen
+                                    // It resets to false via resetAndGoHome() if user cancels
                                 }
                                 res.reason == "insufficient_balance" -> {
                                     Log.e(TAG, "Insufficient balance — shortfall: ${res.shortfallPaise}")
+                                    isHoldPending = false  // allow retry after topping up
                                     // TODO: show InsufficientBalanceSheet
                                 }
                                 else -> {
                                     Log.e(TAG, "Hold failed: ${res.error}")
+                                    isHoldPending = false  // allow retry on generic failure
                                 }
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "Hold exception: ${e.message}", e)
+                            isHoldPending = false  // allow retry on network error
                         }
                     }
                 }
