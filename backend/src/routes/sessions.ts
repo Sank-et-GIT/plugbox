@@ -1,17 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// src/routes/sessions.ts
-//
-// Fixes in this version:
-//   1. POST /start is now idempotent — if app retries due to a network blip,
-//      an existing non-failed session for the same booking is returned instead
-//      of creating a duplicate.
-//   2. POST /stop uses kwhAtStart delta for billing instead of raw PZEM counter.
-//      finalKwh = latestReading.energyKwh - session.kwhAtStart
-//      This protects against RESET_ENERGY timing issues between sessions.
-//   3. GET /meter uses same kwhAtStart delta for live billing display.
-//   4. Template literal fixes throughout (was using "..." with ${} instead of `...`)
-// ─────────────────────────────────────────────────────────────────────────────
-
 import prisma from "../lib/prismaClient";
 import { Router, Request, Response } from "express";
 import {
