@@ -194,7 +194,8 @@ async function handleEnergyData(mqttTopic: string, payload: string): Promise<voi
 // /ir handler — IR sensor + button events from hardware
 //
 // Events:
-//   button_pressed    → publish RELAY_ON  to {topic}/command
+//   button_pressed    → ONLY turns relay ON if a valid PLUG_WAIT session exists.
+//                       If no session → RELAY_OFF + SOLENOID_LOCK (reject unauthorized access).
 //   door_closed       → publish SOLENOID_LOCK, session PLUG_WAIT → ACTIVE
 //   door_open_timeout → publish RELAY_OFF, session → FAILED, full refund
 //   emergency_stop    → publish RELAY_OFF, session → FAILED, full refund
@@ -216,10 +217,45 @@ async function handleIrEvent(mqttTopic: string, payload: string): Promise<void> 
 
   switch (data.event) {
     case "button_pressed":
-      // User pressed physical button inside lid → turn relay ON to start power flow.
-      // Session stays PLUG_WAIT until door_closed confirms lid is shut.
+      // ── SECURITY GATE ────────────────────────────────────────────────────
+      // Before turning relay ON, verify a valid PLUG_WAIT session exists for
+      // this charger. This prevents unauthorized charging by anyone who walks
+      // up and presses the physical button without going through the app.
+      //
+      // Scenario this blocks:
+      //   Person 1 finishes → door left open → Person 2 plugs in + presses
+      //   button → relay turns on → free charging with no booking.
+      //
+      // If no PLUG_WAIT session → relay stays OFF + solenoid locks.
+      // If valid PLUG_WAIT session → relay ON (legitimate booked user).
+      // ─────────────────────────────────────────────────────────────────────
+      const authorizedSession = await prisma.session.findFirst({
+        where: {
+          chargerId: charger.id,
+          status:    SessionStatus.PLUG_WAIT,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (!authorizedSession) {
+        // No valid booking — reject. Turn relay off and lock solenoid so the
+        // charger is secured against further unauthorized attempts.
+        _mqttPublish(`${mqttTopic}/command`, "RELAY_OFF");
+        _mqttPublish(`${mqttTopic}/door`,    "SOLENOID_LOCK");
+        traceMqtt("warn", {
+          topic:   mqttTopic,
+          message: "button_pressed REJECTED — no PLUG_WAIT session. RELAY_OFF + SOLENOID_LOCK sent (unauthorized access attempt)"
+        });
+        console.warn(`[MQTT] ⚠️  Unauthorized button press on ${mqttTopic} — no active booking. Relay blocked.`);
+        break;
+      }
+
+      // Valid session exists — turn relay ON
       _mqttPublish(`${mqttTopic}/command`, "RELAY_ON");
-      traceMqtt("info", { topic: mqttTopic, message: "button_pressed → RELAY_ON published" });
+      traceMqtt("info", {
+        topic:   mqttTopic,
+        message: `button_pressed AUTHORIZED — session ${authorizedSession.id} → RELAY_ON`
+      });
       break;
 
     case "door_closed":
@@ -238,7 +274,7 @@ async function handleIrEvent(mqttTopic: string, payload: string): Promise<void> 
       break;
 
     case "ir_clear":
-      // IR beam unblocked — informational only, no backend action needed.
+      // Informational only — IR beam unblocked, no backend action needed.
       traceMqtt("info", { topic: mqttTopic, message: "ir_clear received — informational, no action" });
       break;
 

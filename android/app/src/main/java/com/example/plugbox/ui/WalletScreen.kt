@@ -45,6 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.text.SimpleDateFormat
+import java.util.*
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION 1 — Colors
@@ -141,6 +143,11 @@ fun WalletScreen(
             if (res.ok) {
                 walletBalance = res.balanceInr.toInt()
                 walletDeposit = res.depositInr.toInt()
+                val calendar = Calendar.getInstance()
+                val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val today = dateFormat.format(calendar.time)
+                calendar.add(Calendar.DAY_OF_YEAR, -1)
+                val yesterday = dateFormat.format(calendar.time)
                 transactions  = res.transactions.map { t ->
                     WcTransaction(
                         id        = t.id,
@@ -152,9 +159,22 @@ fun WalletScreen(
                             "DEPOSIT_REFUND"  -> WcTxnType.DEPOSIT_RELEASED
                             else              -> WcTxnType.TOP_UP
                         },
-                        title     = t.note ?: t.type,
+                        title     = t.note ?: when (t.type) {
+                            "TOPUP"           -> "Top-up"
+                            "PACKAGE_DEBIT"   -> "Charging session"
+                            "REFUND"          -> "Refund"
+                            "DEPOSIT_COLLECT" -> "Security deposit"
+                            "DEPOSIT_REFUND"  -> "Deposit released"
+                            else              -> t.type
+                        },
                         subtitle  = t.createdAt.take(16).replace("T", " "),
-                        dateGroup = "Recent",
+                        // FIX: was always "Recent" — now properly categorised so
+                        // the grouped display can find them under the right header
+                        dateGroup = when {
+                            t.createdAt.startsWith(today)     -> "Today"
+                            t.createdAt.startsWith(yesterday) -> "Yesterday"
+                            else                              -> "Earlier"
+                        },
                         amountInr = t.amountInr.toInt()
                     )
                 }
@@ -226,7 +246,9 @@ fun WalletScreen(
 
     // Group transactions by date header
     // Each group = Pair(header label, list of transactions)
-    val grouped: List<Pair<String, List<WcTransaction>>> = remember {
+    // FIX: remember(transactions) — recomputes whenever API loads new transactions.
+    //      Plain remember{} computed only once on first render (when list is still empty).
+    val grouped: List<Pair<String, List<WcTransaction>>> = remember(transactions) {
         listOf("Today", "Yesterday", "Earlier").mapNotNull { group ->
             val txns = transactions.filter { it.dateGroup == group }
             if (txns.isNotEmpty()) group to txns else null

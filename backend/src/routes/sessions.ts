@@ -407,4 +407,65 @@ router.get("/active/:userId", async (req: Request, res: Response) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /sessions/history/:userId
+// Returns all ENDED sessions for a user — used by StatusScreen history list.
+// Each session includes charger name, duration, kWh used, amount charged,
+// and refund amount so the app can display a complete charging history.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/history/:userId", async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    const sessions = await prisma.session.findMany({
+      where: {
+        userId,
+        status: SessionStatus.ENDED,
+      },
+      include: {
+        charger: true,
+        booking: true,
+      },
+      orderBy: { endedAt: "desc" },
+      take: 50, // cap at 50 most recent sessions
+    });
+
+    const result = sessions.map((s) => {
+      // Duration in minutes from startedAt → endedAt
+      const durationMin =
+        s.startedAt && s.endedAt
+          ? Math.round(
+              (new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime()) /
+              60_000
+            )
+          : 0;
+
+      const kwhLimit   = s.booking.kwhLimit;
+      const pkgPaise   = s.booking.packagePaise;
+      const ratePerKwh = pkgPaise / kwhLimit;
+      const finalKwh   = s.finalKwh ?? 0;
+      const usedPaise  = Math.ceil(finalKwh * ratePerKwh);
+      const refundPaise = Math.max(0, pkgPaise - usedPaise);
+
+      return {
+        id:          s.id,
+        chargerName: s.charger.name,
+        packageName: s.booking.packageName,
+        startedAt:   s.startedAt?.toISOString() ?? null,
+        endedAt:     s.endedAt?.toISOString()   ?? null,
+        durationMin,
+        usedKwh:     parseFloat(finalKwh.toFixed(3)),
+        usedInr:     usedPaise   / 100,
+        refundInr:   refundPaise / 100,
+      };
+    });
+
+    return res.json({ ok: true, sessions: result });
+
+  } catch (err) {
+    console.error("[SESSION] /history error:", err);
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
 export default router;

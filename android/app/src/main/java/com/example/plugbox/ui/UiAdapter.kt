@@ -35,21 +35,21 @@ private val defaultPackages = listOf(
     UiPackage(
         id       = "pkg_mini",
         name     = "Mini",
-        kwhLimit = 0.5,
-        priceInr = 20
+        kwhLimit = 0.02, // ~2 min at 870W
+        priceInr = 10
     ),
     UiPackage(
         id       = "pkg_standard",
         name     = "Standard",
-        kwhLimit = 1.0,
-        priceInr = 40,
+        kwhLimit = 0.05,
+        priceInr = 20,
         badge    = "Best value"   // auto-selected on ChargerDetailScreen
     ),
     UiPackage(
         id       = "pkg_plus",
         name     = "Plus",
-        kwhLimit = 1.5,
-        priceInr = 55
+        kwhLimit = 0.08,
+        priceInr = 30
     )
 )
 
@@ -76,7 +76,7 @@ fun Charger.toUiCharger(): UiCharger {
         socketsAvailable = if (uiStatus == ChargerStatus.IDLE) 1 else 0,
         socketsTotal     = 1,
         status           = uiStatus,
-        priceHint        = "₹40 / 1.0 kWh",
+        priceHint        = "₹20 / 0.05 kWh",
         depositInr       = 100,
         packages         = defaultPackages,
         lat              = lat,

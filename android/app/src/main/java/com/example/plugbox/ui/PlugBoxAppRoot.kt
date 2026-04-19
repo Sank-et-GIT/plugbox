@@ -5,6 +5,14 @@
 //   Fresh install:   Onboarding → Login → Welcome (1.5s) → Main
 //   Returning user:  Main directly
 //   Logged out:      Login → Welcome → Main
+//
+// FIX — Navigation state preservation:
+//   Previously: when(tab) destroyed and recreated PlugBoxHost on every tab
+//   switch, resetting screen/session/selected state back to LIST.
+//   Fix: PlugBoxHost is ALWAYS in the composition tree. When tab != HOME it
+//   is sized to 0dp (invisible, no touches) but never destroyed.
+//   Result: session state, selected charger, screen position all survive
+//   switching to Profile/Wallet/Status and back.
 // ─────────────────────────────────────────────────────────────────────────────
 
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -52,7 +60,6 @@ fun PlugBoxAppRoot(modifier: Modifier = Modifier) {
         AppEntry.LOGIN -> LoginScreen(
             onLoginSuccess = { entry = AppEntry.WELCOME }
         )
-        // 1.5s welcome moment — shown only after login, not on every launch
         AppEntry.WELCOME -> WelcomeScreen(
             onFinished = { entry = AppEntry.MAIN }
         )
@@ -119,18 +126,44 @@ private fun MainTabs(onLogout: () -> Unit) {
             }
         }
     ) { padding ->
-        Box(Modifier.padding(padding)) {
+        Box(Modifier.padding(padding).fillMaxSize()) {
+
+            // ── HOME — always in composition tree, never destroyed ─────────────
+            // When another tab is selected, PlugBoxHost is shrunk to 0×0 dp so
+            // it is invisible and receives no touch events, but all its internal
+            // state (screen, sessionId, selected charger) is preserved.
+            // When the user taps Home again it instantly reappears with the
+            // exact state it had before — no API re-fetch, no session loss.
+            PlugBoxHost(
+                modifier = Modifier
+                    .then(
+                        if (tab == RootTab.HOME) Modifier.fillMaxSize()
+                        else Modifier.requiredSize(0.dp)   // invisible + no touches
+                    )
+            )
+
+            // ── Other tabs — created fresh on demand ───────────────────────────
+            // These screens always reload their data from the API when shown,
+            // so fresh-on-demand is the correct behaviour for them.
             when (tab) {
-                RootTab.HOME    -> PlugBoxHost(modifier = Modifier)
-                RootTab.WALLET  -> WalletScreen()
-                RootTab.STATUS  -> StatusScreen(
-                    onIveArrived    = { /* Phase 2: navigate to SessionScreen */ },
-                    onCancelBooking = { /* Phase 2: cancel API + go home */ }
+                RootTab.WALLET -> WalletScreen()
+
+                RootTab.STATUS -> StatusScreen(
+                    onIveArrived    = {
+                        // Navigate home tab to session flow
+                        tab = RootTab.HOME
+                    },
+                    onCancelBooking = {
+                        tab = RootTab.HOME
+                    }
                 )
+
                 RootTab.PROFILE -> ProfileScreen(
                     onLogout        = onLogout,
                     onDeleteAccount = onLogout
                 )
+
+                RootTab.HOME -> { /* handled by PlugBoxHost above */ }
             }
         }
     }

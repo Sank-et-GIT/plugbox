@@ -43,6 +43,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -56,8 +57,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -84,7 +91,7 @@ import androidx.compose.ui.unit.IntOffset
 
 private const val UNLOCK_RADIUS_M   = 150.0   // metres — unlock button activates within this
 private const val PLUG_IN_TIMEOUT_S = 120      // 2 minutes to plug in after lid opens
-private const val POLL_INTERVAL_MS  = 30_000L  // live meter refresh interval
+private const val POLL_INTERVAL_MS  = 3_000L   // live meter refresh — 3s for smooth demo experience
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SECTION 2 — Colors
@@ -156,6 +163,24 @@ fun SessionScreen(
     // Local sessionId — starts from param, updated when start API returns real ID
     var activeSessionId by remember { mutableIntStateOf(sessionId) }
 
+    // If we enter with an existing sessionId (restored from active session API),
+    // jump straight to CHARGING — no need to go through GRACE/LID_OPEN again
+    LaunchedEffect(Unit) {
+        if (sessionId > 0) {
+            try {
+                val meter = ApiClient.api.meter(sessionId)
+                when {
+                    meter.ok && meter.status == "ACTIVE"   -> stage = Stage.CHARGING
+                    meter.ok && meter.status == "PLUG_WAIT" -> stage = Stage.LID_OPEN
+                    meter.ok && meter.status == "ENDED"    -> stage = Stage.COMPLETE
+                    meter.ok && meter.status == "FAILED"   -> stage = Stage.COMPLETE
+                }
+            } catch (_: Exception) {
+                // If meter check fails, default to GRACE — user can retry unlock
+            }
+        }
+    }
+
     // ── GPS ───────────────────────────────────────────────────────────────────
     var userLocation    by remember { mutableStateOf<Location?>(null) }
     var locationGranted by remember { mutableStateOf(false) }
@@ -209,8 +234,8 @@ fun SessionScreen(
             delay(3_000L)
             plugInSecondsLeft = (plugInSecondsLeft - 3).coerceAtLeast(0)
             try {
-                if (sessionId > 0) {
-                    val meter = ApiClient.api.meter(sessionId)
+                if (activeSessionId > 0) {
+                    val meter = ApiClient.api.meter(activeSessionId)
                     if (meter.ok && meter.status == "ACTIVE") {
                         stage = Stage.CHARGING
                         return@LaunchedEffect
@@ -226,43 +251,67 @@ fun SessionScreen(
     }
 
     // ── Live meter (CHARGING stage) ───────────────────────────────────────────
-    var usedKwh by remember { mutableDoubleStateOf(0.0) }
-    var usedInr by remember { mutableIntStateOf(0) }
+    // displayKwh  = what the UI shows — increments every second
+    // realKwh     = last confirmed value from backend API
+    // The 1s ticker estimates forward from realKwh using power draw.
+    // Every 3s the API poll snaps realKwh to the authoritative backend value.
+    // This gives a continuously moving bar with accurate totals.
+    var realKwh    by remember { mutableDoubleStateOf(0.0) }
+    var displayKwh by remember { mutableDoubleStateOf(0.0) }
 
+    // Derive billing from displayKwh so numbers update every second too
     val ratePerKwh   = pkg.priceInr.toDouble() / pkg.kwhLimit
-    val remainingKwh = (pkg.kwhLimit - usedKwh).coerceAtLeast(0.0)
+    val usedKwh      = displayKwh
+    val usedInr      = (displayKwh * ratePerKwh).roundToInt()
+    val remainingKwh = (pkg.kwhLimit - displayKwh).coerceAtLeast(0.0)
     val remainingInr = (pkg.priceInr - usedInr).coerceAtLeast(0)
-    val progress     = (usedKwh / pkg.kwhLimit).toFloat().coerceIn(0f, 1f)
+    val progress     = (displayKwh / pkg.kwhLimit).toFloat().coerceIn(0f, 1f)
 
-    // ETA uses real charger power — not hardcoded 1.5
     val powerKw    = charger.powerKw.coerceAtLeast(0.1)
     val etaMinutes = if (remainingKwh > 0)
         ((remainingKwh / powerKw) * 60).toInt().coerceAtLeast(1) else 0
 
+    // ── 1s display ticker — continuous forward interpolation ─────────────────
+    // Increments displayKwh every second by (powerKw / 3600) kWh.
+    // Snaps to realKwh when realKwh is ahead (after each API poll).
+    // Stops incrementing past kwhLimit to avoid over-reporting.
+    LaunchedEffect(stage) {
+        if (stage != Stage.CHARGING) return@LaunchedEffect
+        val kwhPerSecond = powerKw / 3600.0
+        while (stage == Stage.CHARGING) {
+            delay(1_000L)
+            val estimated = (displayKwh + kwhPerSecond).coerceAtMost(pkg.kwhLimit)
+            // Use whichever is larger — real reading or estimated
+            displayKwh = maxOf(estimated, realKwh).coerceAtMost(pkg.kwhLimit)
+            if (displayKwh >= pkg.kwhLimit) stage = Stage.COMPLETE
+        }
+    }
+
+    // ── 3s API poll — authoritative kWh sync from backend ────────────────────
+    // Updates realKwh with confirmed PZEM reading.
+    // displayKwh snaps to realKwh on the next 1s tick.
     LaunchedEffect(stage) {
         if (stage != Stage.CHARGING) return@LaunchedEffect
         while (stage == Stage.CHARGING) {
-            delay(POLL_INTERVAL_MS)
             try {
                 if (activeSessionId > 0) {
                     val reading = ApiClient.api.meter(activeSessionId)
                     if (reading.ok) {
-                        usedKwh = reading.usedKwh
-                        usedInr = (reading.usedKwh * ratePerKwh).roundToInt()
+                        realKwh = reading.usedKwh
+                        // Snap display forward if real reading is ahead
+                        if (reading.usedKwh > displayKwh) displayKwh = reading.usedKwh
                         if (reading.status == "ENDED") stage = Stage.COMPLETE
                     }
-                } else {
-                    // Simulation fallback when sessionId not set
-                    val newKwh = (usedKwh + 0.025).coerceAtMost(pkg.kwhLimit)
-                    usedKwh = newKwh
-                    usedInr = (newKwh * ratePerKwh).roundToInt()
                 }
             } catch (e: Exception) {
                 android.util.Log.e("SessionScreen", "Meter poll failed: ${e.message}")
             }
-            if (usedKwh >= pkg.kwhLimit) stage = Stage.COMPLETE
+            delay(POLL_INTERVAL_MS)
         }
     }
+
+    // No animateFloatAsState needed — displayKwh already ticks every 1s smoothly
+
 
     // Refund = unused amount (shown on stop dialog + receipt)
     val refundInr = (pkg.priceInr - usedInr).coerceAtLeast(0)
@@ -474,7 +523,7 @@ fun SessionScreen(
                     usedInr      = usedInr,
                     remainingKwh = remainingKwh,
                     remainingInr = remainingInr,
-                    progress     = progress,
+                    progress     = progress,   // updates every 1s — no animation needed
                     etaMinutes   = etaMinutes
                 )
 
@@ -947,19 +996,13 @@ private fun SsChargingContent(
 
                 Spacer(Modifier.height(20.dp))
 
-                // Progress bar — thick, satisfying
-                LinearProgressIndicator(
-                    progress   = { progress },
-                    modifier   = Modifier
-                        .fillMaxWidth()
-                        .height(12.dp)
-                        .clip(RoundedCornerShape(999.dp)),
-                    color      = SsGreen,
-                    trackColor = SsGreen.copy(alpha = 0.12f),
-                    strokeCap  = StrokeCap.Round
+                // ── Glowing EV progress bar ────────────────────────────────
+                SsGlowingProgressBar(
+                    progress = progress,
+                    modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
 
                 Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
                     Text("${(progress * 100).toInt()}% complete",
@@ -1236,8 +1279,159 @@ private fun SsStepTracker(stage: Stage) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SECTION 12 — Reusable helpers
+// SECTION 12 — Glowing EV progress bar
+//
+// Inspired by neon EV charging UI.
+// Layout:  [%%]  [══glowing bar══  ]  [⚡]
+//
+// Glow is achieved with two BlurMaskFilter layers under the solid bar:
+//   • Outer glow: large blur, low alpha
+//   • Inner glow: tight blur, higher alpha
+//   • Solid bar on top: full opacity SsGreen
+//   • Bright leading-edge dot: white circle at tip of fill
+//   • Inner highlight streak: subtle white line along top of fill
+//
+// The glow alpha pulses with InfiniteTransition so the bar looks alive
+// even when progress is not changing (e.g. slow charge).
 // ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun SsGlowingProgressBar(
+    progress: Float,
+    modifier: Modifier = Modifier
+) {
+    // Pulsing glow — the bar breathes even when value is static
+    val inf = rememberInfiniteTransition(label = "barGlow")
+    val glowAlpha by inf.animateFloat(
+        initialValue  = 0.45f,
+        targetValue   = 0.85f,
+        animationSpec = infiniteRepeatable(
+            tween(1000, easing = FastOutSlowInEasing),
+            RepeatMode.Reverse
+        ),
+        label = "glowAlpha"
+    )
+
+    val clampedProgress = progress.coerceIn(0f, 1f)
+
+    Row(
+        modifier          = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // ── EV charging icon ───────────────────────────────────────────────
+        Icon(
+            Icons.Outlined.EvStation,
+            contentDescription = null,
+            tint     = SsGreen,
+            modifier = Modifier.size(22.dp)
+        )
+
+        // ── Bar ────────────────────────────────────────────────────────────
+        Canvas(
+            modifier = Modifier
+                .weight(1f)
+                .height(32.dp)   // extra height so outer glow has room
+        ) {
+            val barH    = 14.dp.toPx()
+            val yOff    = (size.height - barH) / 2f
+            val filled  = size.width * clampedProgress
+            val r       = barH / 2f
+
+            // Track — dark green tint background
+            drawRoundRect(
+                color        = SsGreen.copy(alpha = 0.12f),
+                topLeft      = Offset(0f, yOff),
+                size         = Size(size.width, barH),
+                cornerRadius = CornerRadius(r)
+            )
+
+            if (clampedProgress > 0.01f) {
+                // Outer glow — wide soft blur
+                drawIntoCanvas { canvas ->
+                    canvas.drawRoundRect(
+                        left    = 0f,
+                        top     = yOff,
+                        right   = filled,
+                        bottom  = yOff + barH,
+                        radiusX = r,
+                        radiusY = r,
+                        paint   = Paint().apply {
+                            asFrameworkPaint().apply {
+                                isAntiAlias = true
+                                color       = SsGreen.copy(alpha = glowAlpha * 0.45f).toArgb()
+                                maskFilter  = android.graphics.BlurMaskFilter(
+                                    24f, android.graphics.BlurMaskFilter.Blur.NORMAL
+                                )
+                            }
+                        }
+                    )
+                }
+
+                // Inner glow — tight blur, brighter
+                drawIntoCanvas { canvas ->
+                    canvas.drawRoundRect(
+                        left    = 0f,
+                        top     = yOff,
+                        right   = filled,
+                        bottom  = yOff + barH,
+                        radiusX = r,
+                        radiusY = r,
+                        paint   = Paint().apply {
+                            asFrameworkPaint().apply {
+                                isAntiAlias = true
+                                color       = SsGreen.copy(alpha = glowAlpha * 0.7f).toArgb()
+                                maskFilter  = android.graphics.BlurMaskFilter(
+                                    10f, android.graphics.BlurMaskFilter.Blur.NORMAL
+                                )
+                            }
+                        }
+                    )
+                }
+
+                // Solid filled bar on top
+                drawRoundRect(
+                    color        = SsGreen,
+                    topLeft      = Offset(0f, yOff),
+                    size         = Size(filled, barH),
+                    cornerRadius = CornerRadius(r)
+                )
+
+                // Inner highlight — thin white streak along top of fill (glass effect)
+                if (filled > r * 2) {
+                    drawRoundRect(
+                        color        = Color.White.copy(alpha = 0.28f),
+                        topLeft      = Offset(r, yOff + barH * 0.1f),
+                        size         = Size(
+                            (filled - r * 2).coerceAtLeast(0f),
+                            barH * 0.32f
+                        ),
+                        cornerRadius = CornerRadius(r * 0.4f)
+                    )
+                }
+
+                // Bright leading-edge dot — marks the tip of progress
+                if (filled > r) {
+                    drawCircle(
+                        color  = Color.White.copy(alpha = glowAlpha * 0.9f),
+                        radius = r * 0.52f,
+                        center = Offset(filled - r, yOff + barH / 2f)
+                    )
+                }
+            }
+        }
+
+        // ── Percentage label ───────────────────────────────────────────────
+        Text(
+            text       = "${(clampedProgress * 100).toInt()}%",
+            fontSize   = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color      = SsGreen
+        )
+    }
+}
+
+
 
 // Pulsing green dot — used in header and live meter
 @Composable
