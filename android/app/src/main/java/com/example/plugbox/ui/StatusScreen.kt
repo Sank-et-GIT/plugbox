@@ -826,7 +826,11 @@ private fun StSessionRow(
                 }
 
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("${"%.1f".format(session.usedKwh)} kWh",
+                    Text(
+                        if (session.usedKwh < 0.01)
+                            "${"%.4f".format(session.usedKwh)} kWh"
+                        else
+                            "${"%.2f".format(session.usedKwh)} kWh",
                         fontWeight = FontWeight.Bold,
                         fontSize   = 14.sp,
                         color      = StTextPrimary)
@@ -874,12 +878,18 @@ private fun StSessionRow(
                     StDetailRow(
                         icon  = Icons.Outlined.Bolt,
                         label = "Energy",
-                        value = "${"%.2f".format(session.usedKwh)} kWh"
+                        value = if (session.usedKwh < 0.001)
+                            "${"%.4f".format(session.usedKwh)} kWh"
+                        else
+                            "${"%.2f".format(session.usedKwh)} kWh"
                     )
                     StDetailRow(
                         icon  = Icons.Outlined.CurrencyRupee,
                         label = "Rate",
-                        value = "₹${"%.1f".format(session.usedInr / session.usedKwh)}/kWh"
+                        value = if (session.usedKwh > 0)
+                            "₹${"%.1f".format(session.usedInr / session.usedKwh)}/kWh"
+                        else
+                            "—"
                     )
                     StDetailRow(
                         icon  = Icons.Outlined.Park,

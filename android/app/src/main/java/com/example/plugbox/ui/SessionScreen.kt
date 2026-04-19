@@ -1050,10 +1050,14 @@ private fun SsChargingContent(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text       = String.format("%.2f", usedKwh),
+                            // Use 4 decimal places for small packages, 2 for large
+                            text       = if (pkg.kwhLimit < 0.1)
+                                String.format("%.4f", usedKwh)
+                            else
+                                String.format("%.2f", usedKwh),
                             fontWeight = FontWeight.Bold,
                             fontSize   = 48.sp,
-                            color      = SsGreen    // green = energy = positive
+                            color      = SsGreen
                         )
                         Text("kWh",
                             fontSize   = 18.sp,
@@ -1090,7 +1094,11 @@ private fun SsChargingContent(
                     // Remaining
                     Column {
                         Text("Remaining", fontSize = 11.sp, color = SsTextSecondary)
-                        Text(String.format("%.2f kWh", remainingKwh),
+                        Text(
+                            if (pkg.kwhLimit < 0.1)
+                                String.format("%.4f kWh", remainingKwh)
+                            else
+                                String.format("%.2f kWh", remainingKwh),
                             fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                             color = SsTextPrimary)
                         Text("₹$remainingInr", fontSize = 13.sp, color = SsTextSecondary)
