@@ -200,12 +200,43 @@ router.post("/stop", async (req: Request, res: Response) => {
         orderBy: { createdAt: "desc" },
       });
 
-    const rawKwh   = latestReading?.energyKwh ?? 0;
-
-    // kwhAtStart is the PZEM counter snapshot when charging began (session → ACTIVE).
-    // Using the delta protects against PZEM not being reset to exactly 0 between sessions.
+    const rawKwh    = latestReading?.energyKwh ?? 0;
     const kwhAtStart = session.kwhAtStart ?? 0;
-    const finalKwh   = Math.max(0, rawKwh - kwhAtStart);
+    let   finalKwh   = Math.max(0, rawKwh - kwhAtStart);
+
+    // ── Power integration fallback ─────────────────────────────────────────────
+    // PZEM energy counter resolution is 0.01 kWh — it only ticks every ~5 min
+    // at 115W. For short demo sessions (< 5 min), energy stays 0.000 even though
+    // real power is flowing. In this case, integrate power × time from all
+    // EnergyReadings stored during this session (each ~500ms apart).
+    // This gives accurate billing regardless of PZEM resolution limits.
+    if (finalKwh === 0 && session.startedAt) {
+      const readings = await prisma.energyReading.findMany({
+        where:   { sessionId },
+        orderBy: { createdAt: "asc" },
+        select:  { createdAt: true, power: true },
+      });
+
+      if (readings.length >= 2) {
+        let integratedKwh = 0;
+        for (let i = 1; i < readings.length; i++) {
+          const dtSeconds =
+            (readings[i].createdAt.getTime() - readings[i - 1].createdAt.getTime()) / 1000;
+          // Guard against large gaps (> 5s) which indicate missing readings, not real time
+          const clampedDt = Math.min(dtSeconds, 5);
+          integratedKwh += (readings[i].power / 1000) * (clampedDt / 3600); // kWh
+        }
+        finalKwh = parseFloat(integratedKwh.toFixed(5));
+        console.log(`[SESSION] Power integration used: ${finalKwh} kWh (${readings.length} readings)`);
+      } else if (session.startedAt) {
+        // Fewer than 2 readings — use duration × last known power as rough estimate
+        const durationHours =
+          (Date.now() - new Date(session.startedAt).getTime()) / 3_600_000;
+        const powerKw = (latestReading?.power ?? 0) / 1000;
+        finalKwh = parseFloat((powerKw * durationHours).toFixed(5));
+        console.log(`[SESSION] Duration fallback: ${finalKwh} kWh`);
+      }
+    }
 
     // ── Calculate billing ──────────────────────────────────────────────────────
     const packagePaise = session.booking.packagePaise;
@@ -257,7 +288,7 @@ router.post("/stop", async (req: Request, res: Response) => {
     mqttPublish(`${topic}/door`,    "SOLENOID_UNLOCK"); // unlock so user can retrieve cable
     mqttPublish(`${topic}/command`, "RESET_ENERGY");    // reset PZEM for next session
 
-    console.log(`[SESSION] Session ${sessionId} stopped — kWh=${finalKwh.toFixed(3)} used=₹${usedPaise / 100} refund=₹${refundPaise / 100}`);
+    console.log(`[SESSION] Session ${sessionId} stopped — kWh=${finalKwh.toFixed(5)} used=₹${usedPaise / 100} refund=₹${refundPaise / 100}`);
 
     return res.json({
       ok:         true,
