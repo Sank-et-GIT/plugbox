@@ -1,23 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// src/mqtt/mqttHandler.ts
-//
-// Does NOT import from mqttClient (circular import removed).
-// mqttPublish and subscribeAllChargers are injected via initMqttHandler()
-// called from app.ts after both modules are loaded.
-//
-// Fixes in this version:
-//   1. Race condition: door_closed + current detection both advancing
-//      PLUG_WAIT → ACTIVE — now uses updateMany() with status guard so
-//      only the first call wins; second call is a safe no-op.
-//   2. Race condition: door_open_timeout + emergency_stop arriving together
-//      causing double refund — session is atomically claimed inside $transaction
-//      before any refund is issued.
-//   3. kwhAtStart stored when session → ACTIVE (billing baseline).
-//   4. Device reboot detection: if device comes online with an ACTIVE session,
-//      the session is failed and user is refunded (relay state unknown).
-//   5. BookingStatus → FAILED when session fails.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import {
   SessionStatus,
   BookingStatus,
@@ -530,20 +510,24 @@ async function handleDeviceStatus(mqttTopic: string, payload: string): Promise<v
   traceMqtt("info", { topic: mqttTopic, message: `Charger ${charger.id} → ${status.toUpperCase()}` });
 
   // ── Device reboot detection ────────────────────────────────────────────────
-  // If the device just came online AND there's an ACTIVE session in the DB,
-  // the device must have rebooted during charging. After a reboot, relay state
-  // is unknown (firmware typically turns relay OFF on boot). We fail the session
-  // and refund the user so they are not billed for time without power.
-  if (isOnline) {
+  // Only treat as reboot if the charger was previously OFFLINE in the DB.
+  // The ESP32 publishes "online" as a heartbeat every ~60s even while running
+  // normally. Without this guard, every heartbeat would kill any active session.
+  //
+  // Real reboot scenario: device was OFFLINE (crashed/power cycled) → comes
+  // back ONLINE. In that case relay state is unknown → fail + refund is correct.
+  // Heartbeat scenario: device stays ONLINE → charger.status was already ONLINE
+  // → wasOffline = false → skip the reboot detection entirely.
+  const wasOffline = charger.status === "OFFLINE";
+
+  if (isOnline && wasOffline) {
     const interruptedSession = await prisma.session.findFirst({
       where:   { chargerId: charger.id, status: SessionStatus.ACTIVE },
       orderBy: { createdAt: "desc" },
     });
 
     if (interruptedSession) {
-      traceMqtt("warn", { topic: mqttTopic, message: `Device rebooted with ACTIVE session ${interruptedSession.id} — failing session and refunding user` });
-      // handleSessionFail will: send RELAY_OFF (harmless if already off),
-      // mark session FAILED, issue full refund, mark booking FAILED
+      traceMqtt("warn", { topic: mqttTopic, message: `Device rebooted (was OFFLINE) with ACTIVE session ${interruptedSession.id} — failing session and refunding user` });
       await handleSessionFail(charger.id, mqttTopic, "device_reboot");
     }
   }
