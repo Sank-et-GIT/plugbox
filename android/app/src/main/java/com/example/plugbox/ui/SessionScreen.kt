@@ -164,6 +164,8 @@ fun SessionScreen(
     // LaunchedEffect below will further advance to CHARGING if already ACTIVE.
     var stage           by remember { mutableStateOf(if (sessionId > 0) Stage.LID_OPEN else Stage.GRACE) }
     var activeSessionId by remember { mutableIntStateOf(sessionId) }
+    // true when session ended due to timeout or hardware failure (not normal completion)
+    var sessionFailed   by remember { mutableStateOf(false) }
 
     // If we enter with an existing sessionId (restored from active session API),
     // jump straight to CHARGING — no need to go through GRACE/LID_OPEN again
@@ -243,13 +245,17 @@ fun SessionScreen(
                         return@LaunchedEffect
                     }
                     if (meter.ok && meter.status == "FAILED") {
+                        sessionFailed = true
                         stage = Stage.COMPLETE
                         return@LaunchedEffect
                     }
                 }
             } catch (_: Exception) { }
         }
-        if (stage == Stage.LID_OPEN) stage = Stage.COMPLETE
+        if (stage == Stage.LID_OPEN) {
+            sessionFailed = true   // timer expired — user never plugged in
+            stage = Stage.COMPLETE
+        }
     }
 
     // ── Live meter (CHARGING stage) ───────────────────────────────────────────
@@ -599,11 +605,12 @@ fun SessionScreen(
                 )
 
                 Stage.COMPLETE -> SsCompleteContent(
-                    pkg       = pkg,
-                    usedKwh   = usedKwh,
-                    usedInr   = usedInr,
-                    refundInr = refundInr,
-                    onDone    = onDone
+                    pkg           = pkg,
+                    usedKwh       = usedKwh,
+                    usedInr       = usedInr,
+                    refundInr     = refundInr,
+                    sessionFailed = sessionFailed,
+                    onDone        = onDone
                 )
             }
 
@@ -1151,20 +1158,97 @@ private fun SsChargingContent(
 @SuppressLint("DefaultLocale")
 @Composable
 private fun SsCompleteContent(
-    pkg:       UiPackage,
-    usedKwh:   Double,
-    usedInr:   Int,
-    refundInr: Int,
-    onDone:    () -> Unit
+    pkg:           UiPackage,
+    usedKwh:       Double,
+    usedInr:       Int,
+    refundInr:     Int,
+    sessionFailed: Boolean = false,
+    onDone:        () -> Unit
 ) {
-    // Spring checkmark animation on entry
+    // Spring animation on entry
     var visible by remember { mutableStateOf(false) }
+    val iconScale by animateFloatAsState(
+        targetValue   = if (visible) 1f else 0f,
+        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMediumLow),
+        label         = "completeIcon"
+    )
+    LaunchedEffect(Unit) { visible = true }
+
+    // ── Session failed / timed out ─────────────────────────────────────────────
+    if (sessionFailed) {
+        Column(
+            modifier            = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Spacer(Modifier.height(8.dp))
+
+            Box(
+                modifier = Modifier
+                    .size(88.dp)
+                    .scale(iconScale)
+                    .clip(CircleShape)
+                    .background(Color(0xFFFFF0F0)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Outlined.Cancel, "Failed",
+                    tint     = Color(0xFFE53935),
+                    modifier = Modifier.size(54.dp))
+            }
+
+            Text("Session Ended",
+                fontSize   = 26.sp,
+                fontWeight = FontWeight.Bold,
+                color      = SsTextPrimary)
+
+            Text(
+                "The lid was not closed in time.\nYour full amount has been refunded.",
+                fontSize   = 15.sp,
+                color      = SsTextSecondary,
+                textAlign  = androidx.compose.ui.text.style.TextAlign.Center,
+                lineHeight = 22.sp
+            )
+
+            if (refundInr > 0) {
+                Surface(
+                    color  = SsGreenBg,
+                    shape  = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, SsGreen.copy(0.2f))
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                        Arrangement.spacedBy(8.dp),
+                        Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Outlined.Refresh, null,
+                            tint = SsGreen, modifier = Modifier.size(20.dp))
+                        Text("+₹$refundInr refunded to wallet",
+                            fontSize   = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color      = SsGreenDark)
+                    }
+                }
+            }
+
+            Button(
+                onClick  = onDone,
+                modifier = Modifier.fillMaxWidth(),
+                colors   = ButtonDefaults.buttonColors(containerColor = SsGreen)
+            ) {
+                Text("Back to Home", fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier   = Modifier.padding(vertical = 4.dp))
+            }
+        }
+        return
+    }
+
+    // ── Normal completion ──────────────────────────────────────────────────────
     val checkScale by animateFloatAsState(
         targetValue   = if (visible) 1f else 0f,
         animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMediumLow),
         label         = "completeCheck"
     )
-    LaunchedEffect(Unit) { visible = true }
 
     // Approximate range from energy charged (avg EV: ~6 km per kWh for 2-wheelers)
     val approxKm = (usedKwh * 6).toInt().coerceAtLeast(0)
@@ -1185,10 +1269,9 @@ private fun SsCompleteContent(
                 .clip(CircleShape)
                 .background(SsGreenBg),
             contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Outlined.CheckCircle, "Done",
-                tint     = SsGreen,
-                modifier = Modifier.size(54.dp))
+        ) {            Icon(Icons.Outlined.CheckCircle, "Done",
+            tint     = SsGreen,
+            modifier = Modifier.size(54.dp))
         }
 
         // Hero message

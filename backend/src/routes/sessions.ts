@@ -1,3 +1,17 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// src/routes/sessions.ts
+//
+// Fixes in this version:
+//   1. POST /start is now idempotent — if app retries due to a network blip,
+//      an existing non-failed session for the same booking is returned instead
+//      of creating a duplicate.
+//   2. POST /stop uses kwhAtStart delta for billing instead of raw PZEM counter.
+//      finalKwh = latestReading.energyKwh - session.kwhAtStart
+//      This protects against RESET_ENERGY timing issues between sessions.
+//   3. GET /meter uses same kwhAtStart delta for live billing display.
+//   4. Template literal fixes throughout (was using "..." with ${} instead of `...`)
+// ─────────────────────────────────────────────────────────────────────────────
+
 import prisma from "../lib/prismaClient";
 import { Router, Request, Response } from "express";
 import {
@@ -228,8 +242,15 @@ router.post("/stop", async (req: Request, res: Response) => {
     const packagePaise = session.booking.packagePaise;
     const kwhLimit     = session.booking.kwhLimit;
     const ratePerKwh   = packagePaise / kwhLimit;
-    const usedPaise    = Math.ceil(finalKwh * ratePerKwh);
-    const refundPaise  = Math.max(0, packagePaise - usedPaise);
+
+    // If finalKwh >= 90% of kwhLimit, treat as fully consumed — charge full package.
+    // This handles power integration timing imprecision: the app's progress bar hits
+    // 100% and calls /stop, but the integration at that exact moment gives 0.0038
+    // instead of 0.005 kWh, causing partial refunds on fully-consumed packages.
+    // Only give a partial refund for genuine early stops (< 90% consumed).
+    const billedKwh   = finalKwh >= kwhLimit * 0.9 ? kwhLimit : finalKwh;
+    const usedPaise   = billedKwh >= kwhLimit ? packagePaise : Math.ceil(billedKwh * ratePerKwh);
+    const refundPaise = Math.max(0, packagePaise - usedPaise);
 
     // ── Refund + session close in single transaction ───────────────────────────
     await prisma.$transaction(async (tx) => {
@@ -249,7 +270,7 @@ router.post("/stop", async (req: Request, res: Response) => {
               type:         WalletTxnType.REFUND,
               amountPaise:  refundPaise,
               balancePaise: newBalance,
-              note:         `Session ended: used ${finalKwh.toFixed(3)} kWh of ${kwhLimit} kWh package`,
+              note:         `Session ended: used ${billedKwh.toFixed(3)} kWh of ${kwhLimit} kWh package`,
               sessionId,
             },
           });
@@ -262,7 +283,7 @@ router.post("/stop", async (req: Request, res: Response) => {
         data:  {
           status:      SessionStatus.ENDED,
           endedAt:     new Date(),
-          finalKwh,
+          finalKwh:    billedKwh,
           refundTxnId,
         },
       });
@@ -271,15 +292,15 @@ router.post("/stop", async (req: Request, res: Response) => {
     // ── Hardware commands ──────────────────────────────────────────────────────
     const topic = session.charger.mqttTopic ?? "pb_device_01";
     mqttPublish(`${topic}/command`, "RELAY_OFF");
-    mqttPublish(`${topic}/door`,    "SOLENOID_UNLOCK"); // unlock so user can retrieve cable
-    mqttPublish(`${topic}/command`, "RESET_ENERGY");    // reset PZEM for next session
+    mqttPublish(`${topic}/door`,    "SOLENOID_UNLOCK");
+    mqttPublish(`${topic}/command`, "RESET_ENERGY");
 
-    console.log(`[SESSION] Session ${sessionId} stopped — kWh=${finalKwh.toFixed(5)} used=₹${usedPaise / 100} refund=₹${refundPaise / 100}`);
+    console.log(`[SESSION] Session ${sessionId} stopped — kWh=${billedKwh.toFixed(5)} used=₹${usedPaise / 100} refund=₹${refundPaise / 100}`);
 
     return res.json({
       ok:         true,
       sessionId,
-      finalKwh,
+      finalKwh:   billedKwh,
       usedInr:    usedPaise    / 100,
       refundInr:  refundPaise  / 100,
       packageInr: packagePaise / 100,
