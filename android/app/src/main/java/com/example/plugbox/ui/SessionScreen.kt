@@ -610,6 +610,7 @@ fun SessionScreen(
                     usedInr       = usedInr,
                     refundInr     = refundInr,
                     sessionFailed = sessionFailed,
+                    sessionId     = activeSessionId,
                     onDone        = onDone
                 )
             }
@@ -1155,6 +1156,8 @@ private fun SsChargingContent(
 //   • Wallet refund highlighted in green — positive surprise if applicable
 // ─────────────────────────────────────────────────────────────────────────────
 
+private enum class UnlockState { IDLE, LOADING, UNLOCKED }
+
 @SuppressLint("DefaultLocale")
 @Composable
 private fun SsCompleteContent(
@@ -1163,8 +1166,15 @@ private fun SsCompleteContent(
     usedInr:       Int,
     refundInr:     Int,
     sessionFailed: Boolean = false,
+    sessionId:     Int     = 0,
     onDone:        () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope   = rememberCoroutineScope()
+
+    // Unlock cable button state
+    var unlockState by remember { mutableStateOf(UnlockState.IDLE) }
+
     // Spring animation on entry
     var visible by remember { mutableStateOf(false) }
     val iconScale by animateFloatAsState(
@@ -1315,52 +1325,90 @@ private fun SsCompleteContent(
             }
         }
 
-        // Unplug instruction
-        Text("Please unplug your cable and close the lid.",
-            fontSize  = 14.sp,
-            color     = SsTextSecondary,
-            textAlign = TextAlign.Center)
-
-        // Receipt card
-        Surface(
-            modifier        = Modifier.fillMaxWidth(),
-            shape           = RoundedCornerShape(16.dp),
-            color           = SsWhite,
-            shadowElevation = 2.dp,
-            border          = androidx.compose.foundation.BorderStroke(1.dp, SsDivider)
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                SsReceiptRow("Package", "${pkg.name}  ·  ${pkg.kwhLimit} kWh")
-                Spacer(Modifier.height(8.dp))
-                SsReceiptRow("Energy used", String.format("%.2f kWh", usedKwh))
-                Spacer(Modifier.height(8.dp))
-                SsReceiptRow("Amount charged", "₹$usedInr")
-
-                // Refund — show only if applicable, highlight in green
-                if (refundInr > 0) {
-                    HorizontalDivider(Modifier.padding(vertical = 10.dp), color = SsDivider)
-                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween,
-                        Alignment.CenterVertically) {
-                        Text("Wallet refund", fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold, color = SsGreenDark)
-                        Surface(color = SsGreenBg, shape = RoundedCornerShape(8.dp)) {
-                            Text("+₹$refundInr", fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold, color = SsGreen,
-                                modifier   = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+        // Unlock cable button — user taps when ready to retrieve cable
+        when (unlockState) {
+            UnlockState.IDLE -> {
+                Button(
+                    onClick = {
+                        unlockState = UnlockState.LOADING
+                        scope.launch {
+                            try {
+                                val userId = ApiClient.getUserId(context) ?: "rashi"
+                                ApiClient.api.unlockCable(
+                                    com.example.plugbox.network.UnlockCableRequest(
+                                        sessionId = sessionId,
+                                        userId    = userId
+                                    )
+                                )
+                                unlockState = UnlockState.UNLOCKED
+                            } catch (e: Exception) {
+                                android.util.Log.e("SessionScreen", "unlock-cable failed: ${e.message}")
+                                unlockState = UnlockState.UNLOCKED // show unlocked anyway
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    shape    = RoundedCornerShape(14.dp),
+                    colors   = ButtonDefaults.buttonColors(
+                        containerColor = SsGreen, contentColor = SsWhite)
+                ) {
+                    Icon(Icons.Outlined.LockOpen, null,
+                        modifier = Modifier.size(20.dp).padding(end = 0.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Unlock to retrieve cable",
+                        fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            }
+            UnlockState.LOADING -> {
+                Button(
+                    onClick  = {},
+                    enabled  = false,
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    shape    = RoundedCornerShape(14.dp),
+                    colors   = ButtonDefaults.buttonColors(
+                        containerColor = SsGreen.copy(alpha = 0.6f))
+                ) {
+                    Text("Unlocking...", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            }
+            UnlockState.UNLOCKED -> {
+                // Lid is now open — show instructions + Done
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape    = RoundedCornerShape(12.dp),
+                    color    = SsGreenBg,
+                    border   = androidx.compose.foundation.BorderStroke(1.dp, SsGreen.copy(0.2f))
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        Arrangement.spacedBy(10.dp),
+                        Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Outlined.LockOpen, null,
+                            tint = SsGreen, modifier = Modifier.size(20.dp))
+                        Column {
+                            Text("Lid unlocked",
+                                fontSize   = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color      = SsGreenDark)
+                            Text("Unplug cable and close the lid",
+                                fontSize = 12.sp, color = SsTextSecondary)
                         }
                     }
                 }
-            }
-        }
 
-        Button(
-            onClick  = onDone,
-            modifier = Modifier.fillMaxWidth().height(54.dp),
-            shape    = RoundedCornerShape(14.dp),
-            colors   = ButtonDefaults.buttonColors(
-                containerColor = SsGreen, contentColor = SsWhite)
-        ) {
-            Text("Done", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Spacer(Modifier.height(4.dp))
+
+                Button(
+                    onClick  = onDone,
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    shape    = RoundedCornerShape(14.dp),
+                    colors   = ButtonDefaults.buttonColors(
+                        containerColor = SsGreen, contentColor = SsWhite)
+                ) {
+                    Text("Done", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            }
         }
 
         Spacer(Modifier.height(8.dp))

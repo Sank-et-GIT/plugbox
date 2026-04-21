@@ -63,6 +63,10 @@ interface PlugBoxApi {
     @GET("/sessions/history/{userId}")
     suspend fun sessionHistory(@Path("userId") userId: String): SessionHistoryResponse
 
+    // Unlock lid after session ends — user taps to retrieve cable
+    @POST("/sessions/unlock-cable")
+    suspend fun unlockCable(@Body req: UnlockCableRequest): UnlockCableResponse
+
     // ── Auth ──────────────────────────────────────────────────────────────────
 
     // Firebase idToken → our JWT + userId

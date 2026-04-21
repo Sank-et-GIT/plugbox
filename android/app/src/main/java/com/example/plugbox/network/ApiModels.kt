@@ -209,3 +209,12 @@ data class SessionHistoryResponse(
     val ok:       Boolean,
     val sessions: List<SessionHistoryItem> = emptyList()
 )
+
+// POST /sessions/unlock-cable
+data class UnlockCableRequest(val sessionId: Int, val userId: String)
+
+data class UnlockCableResponse(
+    val ok:        Boolean,
+    val sessionId: Int?    = null,
+    val error:     String? = null
+)
