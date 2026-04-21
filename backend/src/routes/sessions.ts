@@ -292,7 +292,9 @@ router.post("/stop", async (req: Request, res: Response) => {
     // ── Hardware commands ──────────────────────────────────────────────────────
     const topic = session.charger.mqttTopic ?? "pb_device_01";
     mqttPublish(`${topic}/command`, "RELAY_OFF");
-    mqttPublish(`${topic}/door`,    "SOLENOID_UNLOCK");
+    // SOLENOID_UNLOCK is NOT sent here — user taps "Unlock to retrieve cable"
+    // on the complete screen which calls POST /sessions/unlock-cable.
+    // This gives user control over when the lid opens.
     mqttPublish(`${topic}/command`, "RESET_ENERGY");
 
     console.log(`[SESSION] Session ${sessionId} stopped — kWh=${billedKwh.toFixed(5)} used=₹${usedPaise / 100} refund=₹${refundPaise / 100}`);
@@ -508,6 +510,55 @@ router.get("/history/:userId", async (req: Request, res: Response) => {
 
   } catch (err) {
     console.error("[SESSION] /history error:", err);
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /sessions/unlock-cable
+// Body: { sessionId: number, userId: string }
+//
+// Called from the complete screen when user taps "Unlock to retrieve cable".
+// Only works on ENDED sessions — session must belong to the requesting user.
+// Sends SOLENOID_UNLOCK to hardware. Idempotent — safe to call multiple times.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/unlock-cable", async (req: Request, res: Response) => {
+  try {
+    const { sessionId, userId } = req.body as {
+      sessionId?: number;
+      userId?:    string;
+    };
+
+    if (typeof sessionId !== "number")
+      return res.status(400).json({ ok: false, error: "sessionId must be a number" });
+    if (!userId)
+      return res.status(400).json({ ok: false, error: "userId is required" });
+
+    const session = await prisma.session.findUnique({
+      where:   { id: sessionId },
+      include: { charger: true },
+    });
+
+    if (!session)
+      return res.status(404).json({ ok: false, error: "Session not found" });
+
+    // Security: only the session owner can unlock
+    if (session.userId !== userId)
+      return res.status(403).json({ ok: false, error: "Not your session" });
+
+    // Only unlock for ended sessions — not for active or failed
+    if (session.status !== SessionStatus.ENDED)
+      return res.status(409).json({ ok: false, error: "Session is not ended" });
+
+    const topic = session.charger.mqttTopic ?? "pb_device_01";
+    mqttPublish(`${topic}/door`, "SOLENOID_UNLOCK");
+
+    console.log(`[SESSION] unlock-cable → SOLENOID_UNLOCK for session ${sessionId}`);
+
+    return res.json({ ok: true, sessionId });
+
+  } catch (err) {
+    console.error("[SESSION] /unlock-cable error:", err);
     return res.status(500).json({ ok: false, error: "Server error" });
   }
 });

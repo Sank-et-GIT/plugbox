@@ -271,7 +271,8 @@ async function runAutoStop(now: Date): Promise<void> {
 
       const topic = session.charger.mqttTopic ?? "pb_device_01";
       mqttPublish(`${topic}/command`, "RELAY_OFF");
-      mqttPublish(`${topic}/door`,    "SOLENOID_UNLOCK"); // unlock so user can retrieve cable
+      // SOLENOID_UNLOCK not sent here — user taps "Unlock to retrieve cable"
+      // on the complete screen (POST /sessions/unlock-cable).
       mqttPublish(`${topic}/command`, "RESET_ENERGY");
 
       console.log(
