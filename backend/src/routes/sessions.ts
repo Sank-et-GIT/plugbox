@@ -515,45 +515,6 @@ router.get("/history/:userId", async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /sessions/reopen-lid
-// Body: { sessionId: number }
-//
-// Resends SOLENOID_UNLOCK for an existing PLUG_WAIT session.
-// Used when user didn't open the lid in time and solenoid auto-locked.
-// No booking check needed — session already exists and is valid.
-// ─────────────────────────────────────────────────────────────────────────────
-router.post("/reopen-lid", async (req: Request, res: Response) => {
-  try {
-    const { sessionId } = req.body as { sessionId?: number };
-
-    if (typeof sessionId !== "number")
-      return res.status(400).json({ ok: false, error: "sessionId must be a number" });
-
-    const session = await prisma.session.findUnique({
-      where:   { id: sessionId },
-      include: { charger: true },
-    });
-
-    if (!session)
-      return res.status(404).json({ ok: false, error: "Session not found" });
-
-    if (session.status !== SessionStatus.PLUG_WAIT)
-      return res.status(409).json({ ok: false, error: "Session is not in PLUG_WAIT" });
-
-    const topic = session.charger.mqttTopic ?? "pb_device_01";
-    mqttPublish(`${topic}/door`, "SOLENOID_UNLOCK");
-
-    console.log(`[SESSION] reopen-lid → SOLENOID_UNLOCK for session ${sessionId}`);
-
-    return res.json({ ok: true, sessionId });
-
-  } catch (err) {
-    console.error("[SESSION] /reopen-lid error:", err);
-    return res.status(500).json({ ok: false, error: "Server error" });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
 // POST /sessions/unlock-cable
 // Body: { sessionId: number, userId: string }
 //
